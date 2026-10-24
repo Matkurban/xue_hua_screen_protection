@@ -22,21 +22,28 @@ using flutter::MethodResultFunctions;
 
 }  // namespace
 
-TEST(XueHuaScreenProtectionPlugin, GetPlatformVersion) {
+TEST(XueHuaScreenProtectionPlugin, SetAndQuerySecureScreen) {
   XueHuaScreenProtectionPlugin plugin;
-  // Save the reply value from the success callback.
-  std::string result_string;
+  bool set_result = false;
+  EncodableMap args = {{EncodableValue("enabled"), EncodableValue(true)}};
   plugin.HandleMethodCall(
-      MethodCall("getPlatformVersion", std::make_unique<EncodableValue>()),
+      MethodCall("setSecureScreen", std::make_unique<EncodableValue>(args)),
       std::make_unique<MethodResultFunctions<>>(
-          [&result_string](const EncodableValue* result) {
-            result_string = std::get<std::string>(*result);
+          [&set_result](const EncodableValue *result) {
+            set_result = std::get<bool>(*result);
           },
           nullptr, nullptr));
+  EXPECT_TRUE(set_result);
 
-  // Since the exact string varies by host, just ensure that it's a string
-  // with the expected format.
-  EXPECT_TRUE(result_string.rfind("Windows ", 0) == 0);
+  bool is_enabled = false;
+  plugin.HandleMethodCall(
+      MethodCall("isSecureScreenEnabled", std::make_unique<EncodableValue>()),
+      std::make_unique<MethodResultFunctions<>>(
+          [&is_enabled](const EncodableValue *result) {
+            is_enabled = std::get<bool>(*result);
+          },
+          nullptr, nullptr));
+  EXPECT_TRUE(is_enabled);
 }
 
 }  // namespace test

@@ -2,28 +2,48 @@ import Flutter
 import UIKit
 import XCTest
 
-// If your plugin has been explicitly set to "type: .dynamic" in the Package.swift,
-// you will need to add your plugin as a dependency of RunnerTests within Xcode.
-
 @testable import xue_hua_screen_protection
-
-// This demonstrates a simple unit test of the Swift portion of this plugin's implementation.
-//
-// See https://developer.apple.com/documentation/xctest for more information about using XCTest.
 
 class RunnerTests: XCTestCase {
 
-  func testGetPlatformVersion() {
+  func testSetAndQuerySecureScreen() {
     let plugin = XueHuaScreenProtectionPlugin()
 
-    let call = FlutterMethodCall(methodName: "getPlatformVersion", arguments: [])
+    let enableCall = FlutterMethodCall(
+      methodName: "setSecureScreen",
+      arguments: ["enabled": true]
+    )
 
-    let resultExpectation = expectation(description: "result block must be called.")
-    plugin.handle(call) { result in
-      XCTAssertEqual(result as! String, "iOS " + UIDevice.current.systemVersion)
-      resultExpectation.fulfill()
+    let enableExpectation = expectation(description: "setSecureScreen completes")
+    plugin.handle(enableCall) { result in
+      XCTAssertEqual(result as? Bool, true)
+      enableExpectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
+
+    let queryCall = FlutterMethodCall(
+      methodName: "isSecureScreenEnabled",
+      arguments: nil
+    )
+    let queryExpectation = expectation(description: "isSecureScreenEnabled completes")
+    plugin.handle(queryCall) { result in
+      XCTAssertEqual(result as? Bool, true)
+      queryExpectation.fulfill()
     }
     waitForExpectations(timeout: 1)
   }
 
+  func testGetCapabilitiesReturnsIOS() {
+    let plugin = XueHuaScreenProtectionPlugin()
+    let call = FlutterMethodCall(methodName: "getCapabilities", arguments: nil)
+
+    let expectation = expectation(description: "getCapabilities completes")
+    plugin.handle(call) { result in
+      let map = result as? [String: Any]
+      XCTAssertEqual(map?["platform"] as? String, "ios")
+      XCTAssertEqual(map?["supportsHardwareAntiScreenshot"] as? Bool, true)
+      expectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
+  }
 }

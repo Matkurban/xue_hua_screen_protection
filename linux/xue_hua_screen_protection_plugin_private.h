@@ -2,9 +2,5 @@
 
 #include "include/xue_hua_screen_protection/xue_hua_screen_protection_plugin.h"
 
-// This file exposes some plugin internals for unit testing. See
-// https://github.com/flutter/flutter/issues/88724 for current limitations
-// in the unit-testable API.
-
-// Handles the getPlatformVersion method call.
-FlMethodResponse *get_platform_version();
+// Exposes plugin internals for unit testing on Linux.
+FlMethodResponse* get_linux_capabilities_response();

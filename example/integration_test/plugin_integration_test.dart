@@ -1,24 +1,23 @@
-// This is a basic Flutter integration test.
-//
-// Since integration tests run in a full Flutter application, they can interact
-// with the host side of a plugin implementation, unlike Dart unit tests.
-//
-// For more information about Flutter integration tests, please see
-// https://flutter.dev/to/integration-testing
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('getPlatformVersion test', (WidgetTester tester) async {
-    final XueHuaScreenProtection plugin = XueHuaScreenProtection();
-    final String? version = await plugin.getPlatformVersion();
-    // The version string depends on the host platform running the test, so
-    // just assert that some non-empty string is returned.
-    expect(version?.isNotEmpty, true);
+  testWidgets('enableSecureScreen and getCapabilities integration test', (
+    WidgetTester tester,
+  ) async {
+    final plugin = XueHuaScreenProtection.instance;
+    final enabled = await plugin.enableSecureScreen();
+    expect(enabled, isTrue);
+
+    final status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isTrue);
+
+    final capabilities = await plugin.getCapabilities();
+    expect(capabilities.platform.isNotEmpty, isTrue);
+
+    await plugin.disableSecureScreen();
   });
 }
