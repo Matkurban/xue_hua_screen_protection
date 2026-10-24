@@ -14,13 +14,13 @@ abstract class XueHuaScreenProtectionPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static XueHuaScreenProtectionPlatform _instance =
-      MethodChannelXueHuaScreenProtection();
+  static XueHuaScreenProtectionPlatform? _instance;
 
   /// The default instance of [XueHuaScreenProtectionPlatform] to use.
   ///
-  /// Defaults to [MethodChannelXueHuaScreenProtection].
-  static XueHuaScreenProtectionPlatform get instance => _instance;
+  /// Defaults to [MethodChannelXueHuaScreenProtection], created lazily.
+  static XueHuaScreenProtectionPlatform get instance =>
+      _instance ??= MethodChannelXueHuaScreenProtection();
 
   /// Platform-specific implementations should set this with their own
   /// platform-specific class that extends [XueHuaScreenProtectionPlatform] when

@@ -10,11 +10,12 @@ import 'xue_hua_screen_protection_platform_interface.dart';
 /// event channels to communicate with native platform code.
 class MethodChannelXueHuaScreenProtection
     extends XueHuaScreenProtectionPlatform {
-  /// Constructs a [MethodChannelXueHuaScreenProtection] and registers reverse
-  /// method call handlers for native events.
-  MethodChannelXueHuaScreenProtection() {
-    methodChannel.setMethodCallHandler(_handleNativeMethodCall);
-  }
+  /// Constructs a [MethodChannelXueHuaScreenProtection].
+  ///
+  /// Native reverse-call handlers are registered lazily on first use so unit
+  /// tests can replace [XueHuaScreenProtectionPlatform.instance] before
+  /// [WidgetsFlutterBinding.ensureInitialized] runs.
+  MethodChannelXueHuaScreenProtection();
 
   /// The method channel used to invoke native screen protection APIs.
   @visibleForTesting
@@ -33,6 +34,15 @@ class MethodChannelXueHuaScreenProtection
 
   StreamSubscription<dynamic>? _eventChannelSubscription;
   bool _eventChannelListening = false;
+  bool _nativeHandlerRegistered = false;
+
+  void _ensureNativeHandlerRegistered() {
+    if (_nativeHandlerRegistered) {
+      return;
+    }
+    _nativeHandlerRegistered = true;
+    methodChannel.setMethodCallHandler(_handleNativeMethodCall);
+  }
 
   Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
     if (call.method == 'onProtectionEvent' && call.arguments is Map) {
@@ -42,6 +52,7 @@ class MethodChannelXueHuaScreenProtection
   }
 
   void _ensureEventChannelInitialized() {
+    _ensureNativeHandlerRegistered();
     if (_eventChannelListening) return;
     _eventChannelListening = true;
     try {
@@ -62,6 +73,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<bool> setSecureScreen(bool enabled) async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>(
       'setSecureScreen',
       <String, dynamic>{'enabled': enabled},
@@ -71,6 +83,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<bool> isSecureScreenEnabled() async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>(
       'isSecureScreenEnabled',
     );
@@ -81,6 +94,7 @@ class MethodChannelXueHuaScreenProtection
   Future<bool> configureAppSwitcherProtection(
     ScreenProtectionMaskConfig config,
   ) async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>(
       'configureAppSwitcherProtection',
       config.toMap(),
@@ -90,6 +104,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<bool> configureWebProtection(WebProtectionConfig config) async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>(
       'configureWebProtection',
       config.toMap(),
@@ -99,6 +114,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<bool> isScreenBeingRecorded() async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>(
       'isScreenBeingRecorded',
     );
@@ -107,6 +123,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<ScreenProtectionStatus> getProtectionStatus() async {
+    _ensureNativeHandlerRegistered();
     final map = await methodChannel.invokeMapMethod<Object?, Object?>(
       'getProtectionStatus',
     );
@@ -124,6 +141,7 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<ScreenProtectionCapabilities> getCapabilities() async {
+    _ensureNativeHandlerRegistered();
     final map = await methodChannel.invokeMapMethod<Object?, Object?>(
       'getCapabilities',
     );
@@ -144,12 +162,14 @@ class MethodChannelXueHuaScreenProtection
 
   @override
   Future<bool> showPrivacyMask() async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>('showPrivacyMask');
     return result ?? false;
   }
 
   @override
   Future<bool> hidePrivacyMask() async {
+    _ensureNativeHandlerRegistered();
     final result = await methodChannel.invokeMethod<bool>('hidePrivacyMask');
     return result ?? false;
   }
