@@ -136,9 +136,11 @@ class XueHuaScreenProtectionPlugin :
                 val applied = applySecureScreenFlag(enabled)
                 result.success(applied)
             }
+
             "isSecureScreenEnabled" -> {
                 result.success(isSecureScreenEnabled)
             }
+
             "configureAppSwitcherProtection" -> {
                 maskEnabled = call.argument<Boolean>("enabled") ?: true
                 maskStyle = call.argument<String>("style") ?: "blur"
@@ -159,14 +161,17 @@ class XueHuaScreenProtectionPlugin :
                 }
                 result.success(true)
             }
+
             "configureWebProtection" -> {
                 // Web-only configuration; safely returns false on Android.
                 result.success(false)
             }
+
             "isScreenBeingRecorded" -> {
                 checkVirtualDisplaysForRecording(emitIfChanged = false)
                 result.success(isScreenBeingRecorded)
             }
+
             "getProtectionStatus" -> {
                 checkVirtualDisplaysForRecording(emitIfChanged = false)
                 result.success(
@@ -179,6 +184,7 @@ class XueHuaScreenProtectionPlugin :
                     )
                 )
             }
+
             "getCapabilities" -> {
                 val sdkInt = Build.VERSION.SDK_INT
                 val limitations = mutableListOf<String>()
@@ -206,14 +212,17 @@ class XueHuaScreenProtectionPlugin :
                     )
                 )
             }
+
             "showPrivacyMask" -> {
                 setPrivacyMaskVisible(true, reason = "manual")
                 result.success(true)
             }
+
             "hidePrivacyMask" -> {
                 setPrivacyMaskVisible(false, reason = "manual")
                 result.success(true)
             }
+
             else -> result.notImplemented()
         }
     }
@@ -407,12 +416,12 @@ class XueHuaScreenProtectionPlugin :
             val name = (display.name ?: "").lowercase()
             val isVirtualOrMirror =
                 (flags and Display.FLAG_PRESENTATION) == 0 ||
-                    name.contains("record") ||
-                    name.contains("screencast") ||
-                    name.contains("scrcpy") ||
-                    name.contains("virtual") ||
-                    name.contains("capture") ||
-                    name.contains("mirror")
+                        name.contains("record") ||
+                        name.contains("screencast") ||
+                        name.contains("scrcpy") ||
+                        name.contains("virtual") ||
+                        name.contains("capture") ||
+                        name.contains("mirror")
             if (isVirtualOrMirror) {
                 suspiciousDisplayFound = true
                 break
@@ -554,16 +563,17 @@ class XueHuaScreenProtectionPlugin :
             tag = MASK_VIEW_TAG
             isClickable = true
             isFocusable = true
-            val alphaAdjustedBg = if (maskStyle == "blur" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Color.argb(
-                    195,
-                    Color.red(maskBackgroundColor),
-                    Color.green(maskBackgroundColor),
-                    Color.blue(maskBackgroundColor)
-                )
-            } else {
-                maskBackgroundColor
-            }
+            val alphaAdjustedBg =
+                if (maskStyle == "blur" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Color.argb(
+                        195,
+                        Color.red(maskBackgroundColor),
+                        Color.green(maskBackgroundColor),
+                        Color.blue(maskBackgroundColor)
+                    )
+                } else {
+                    maskBackgroundColor
+                }
             setBackgroundColor(alphaAdjustedBg)
         }
 
