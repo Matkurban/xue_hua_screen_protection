@@ -415,7 +415,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               },
             ),
             const SizedBox(height: 8),
-            Row(
+            Column(
               children: <Widget>[
                 const Text('Mask Style: '),
                 const SizedBox(width: 12),
@@ -674,10 +674,12 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
-                Text(
-                  '6. Real-Time Security Event Stream (${_eventLog.length})',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Text(
+                    '6. Real-Time Security Event Stream (${_eventLog.length})',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 if (_eventLog.isNotEmpty)
