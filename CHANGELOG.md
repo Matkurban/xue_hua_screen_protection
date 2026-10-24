@@ -1,3 +1,10 @@
+## 1.0.1
+
+* Shortened `pubspec.yaml` `description` to meet pub.dev length guidance (60–180 characters).
+* Compatible with CMake 4.x by bumping example googletest to v1.15.2 (fixes Windows/Linux `Unable to generate build files`).
+* Lazily initialize `MethodChannel` / default plugin instance to avoid early binding issues.
+* Replace deprecated Material imports in tests.
+
 ## 1.0.0
 
 * Initial stable release of `xue_hua_screen_protection` by Matkurban (`3496354336@qq.com`).
