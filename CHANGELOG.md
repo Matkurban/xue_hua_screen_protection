@@ -1,3 +1,10 @@
+## 1.0.2
+
+* Linux: real privacy overlay for app-switcher / focus-out masking; secure-screen enables mask fallback and cleanly undoes it on disable; focus-out debounce; hide overlay without destroying (fixes Flutter Driver input).
+* `ScreenProtectionScope` applies native configuration after the first frame to avoid route-push frame-sync hangs.
+* Example: Flutter Driver suite (`example/test_driver`) covering secure screen, privacy mask, scoped vault, web config; UI ValueKeys and navigator helpers for reliable automation.
+* Verified green on Linux and Windows: unit, integration_test, and flutter_driver (9 cases).
+
 ## 1.0.1
 
 * Shortened `pubspec.yaml` `description` to meet pub.dev length guidance (60–180 characters).
