@@ -356,8 +356,16 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     if visible {
       if privacyOverlayView == nil {
         let overlay = buildPrivacyOverlay(frame: window.bounds)
+        overlay.isHidden = false
         window.addSubview(overlay)
         privacyOverlayView = overlay
+      } else if let overlay = privacyOverlayView {
+        overlay.frame = window.bounds
+        overlay.isHidden = false
+        if overlay.superview !== window {
+          window.addSubview(overlay)
+        }
+        window.bringSubviewToFront(overlay)
       }
       privacyOverlayView?.frame = window.bounds
       if let overlay = privacyOverlayView {
@@ -368,8 +376,8 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         emitEvent(type: "maskShown", metadata: ["reason": reason])
       }
     } else {
-      privacyOverlayView?.removeFromSuperview()
-      privacyOverlayView = nil
+      // Hide without destroying — matches Linux/macOS Driver-friendly behavior.
+      privacyOverlayView?.isHidden = true
       if isMaskCurrentlyVisible {
         isMaskCurrentlyVisible = false
         emitEvent(type: "maskHidden", metadata: ["reason": reason])

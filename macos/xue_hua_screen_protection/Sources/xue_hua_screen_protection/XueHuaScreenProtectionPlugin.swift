@@ -6,8 +6,8 @@ import FlutterMacOS
 ///
 /// Capabilities:
 /// - Hardware screenshot, recording, and window-sharing prevention via `NSWindow.sharingType = .none`.
-/// - Screenshot detection via `NSMetadataQuery` (`kMDItemIsScreenCapture = 1`) and pasteboard image monitoring.
-/// - Screen recording / window capture detection via `CGWindowListCopyWindowInfo` and `NSScreen` inspection.
+/// - Screenshot detection via `NSMetadataQuery` (`kMDItemIsScreenCapture = 1`) plus pasteboard image change polling.
+/// - Screen recording / window capture detection via `CGWindowListCopyWindowInfo` and known capture helper apps.
 /// - Inactive window / app-switcher privacy mask using `NSVisualEffectView` blur or solid color overlay.
 public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private static let methodChannelName = "com.kurban.xue_hua_screen_protection/methods"
@@ -37,6 +37,8 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     private var knownCaptureFiles: Set<String> = []
     private var initialQueryCompleted: Bool = false
     private var recordingPollTimer: Timer?
+    private var pasteboardPollTimer: Timer?
+    private var lastPasteboardChangeCount: Int = NSPasteboard.general.changeCount
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let methodChannel = FlutterMethodChannel(
@@ -60,6 +62,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         NotificationCenter.default.removeObserver(self)
         metadataQuery?.stop()
         recordingPollTimer?.invalidate()
+        pasteboardPollTimer?.invalidate()
     }
 
     public func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -220,6 +223,10 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         recordingPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkRecordingState(emitIfChanged: true)
         }
+        lastPasteboardChangeCount = NSPasteboard.general.changeCount
+        pasteboardPollTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
+            self?.checkPasteboardForScreenshot()
+        }
     }
 
     private func startScreenshotMetadataQuery() {
@@ -278,24 +285,78 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     }
 
     private func checkRecordingState(emitIfChanged: Bool) {
-        var recordingDetected = false
-        let runningApps = NSWorkspace.shared.runningApplications
-        for app in runningApps {
-            let bundleId = (app.bundleIdentifier ?? "").lowercased()
-            if bundleId == "com.apple.screencaptureui" {
-                recordingDetected = true
-                break
-            }
-        }
-
+        let recordingDetected = detectScreenRecording()
         if emitIfChanged, recordingDetected != isScreenBeingRecorded {
             isScreenBeingRecorded = recordingDetected
             emitEvent(
                 type: recordingDetected ? "recordingStarted" : "recordingStopped",
-                metadata: ["source": "NSWorkspace_screencaptureui"]
+                metadata: ["source": "CGWindowList_and_capture_helpers"]
             )
         } else {
             isScreenBeingRecorded = recordingDetected
+        }
+    }
+
+    /// Heuristic capture detection: known helper apps + on-screen window owners/titles.
+    private func detectScreenRecording() -> Bool {
+        let captureBundleIds: Set<String> = [
+            "com.apple.screencaptureui",
+            "com.apple.screenshot.system",
+            "com.apple.ReplayKit.RPBroadcastActivityRemoteViewExtension",
+            "com.apple.controlcenter.ScreenRecordingIndicator",
+        ]
+        for app in NSWorkspace.shared.runningApplications {
+            let bundleId = (app.bundleIdentifier ?? "").lowercased()
+            if captureBundleIds.contains(bundleId) {
+                return true
+            }
+            // QuickTime Player may be idle; only treat as capture when a capture window exists below.
+            if bundleId == "com.apple.quicktimeplayerx" || bundleId == "com.apple.quicktimeplayer" {
+                // Fall through to window list for confirmation.
+            }
+        }
+
+        let options = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+        guard let infoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        for info in infoList {
+            let owner = ((info[kCGWindowOwnerName as String] as? String) ?? "").lowercased()
+            let windowName = ((info[kCGWindowName as String] as? String) ?? "").lowercased()
+            if owner.contains("screencapture")
+                || owner.contains("screenshot")
+                || owner == "replaykituiagent"
+                || windowName.contains("screen recording")
+                || windowName.contains("screen capture")
+                || (owner.contains("quicktime") && (windowName.contains("record") || windowName.contains("movie recording")))
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Detect clipboard screenshots (⌃⌘⇧3 / ⌃⌘⇧4) which never land on disk for NSMetadataQuery.
+    /// Only screenshot-specific pasteboard UTIs are accepted to avoid false positives from normal image copies.
+    private func checkPasteboardForScreenshot() {
+        let pasteboard = NSPasteboard.general
+        let changeCount = pasteboard.changeCount
+        guard changeCount != lastPasteboardChangeCount else { return }
+        lastPasteboardChangeCount = changeCount
+
+        let screenshotHints: Set<NSPasteboard.PasteboardType> = [
+            NSPasteboard.PasteboardType("com.apple.screen-capture.internal"),
+            NSPasteboard.PasteboardType("com.apple.screenshot"),
+        ]
+        guard let items = pasteboard.pasteboardItems else { return }
+        for item in items {
+            if item.types.contains(where: { screenshotHints.contains($0) }) {
+                emitEvent(
+                    type: "screenshotTaken",
+                    metadata: ["source": "NSPasteboard_screen_capture"]
+                )
+                return
+            }
         }
     }
 
@@ -340,8 +401,13 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         if visible {
             if privacyOverlayView == nil {
                 let overlay = buildPrivacyOverlay(frame: contentView.bounds)
+                overlay.isHidden = false
                 contentView.addSubview(overlay, positioned: .above, relativeTo: nil)
                 privacyOverlayView = overlay
+            } else if let overlay = privacyOverlayView {
+                overlay.frame = contentView.bounds
+                overlay.isHidden = false
+                contentView.addSubview(overlay, positioned: .above, relativeTo: nil)
             }
             privacyOverlayView?.frame = contentView.bounds
             if !isMaskCurrentlyVisible {
@@ -349,8 +415,9 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
                 emitEvent(type: "maskShown", metadata: ["reason": reason])
             }
         } else {
-            privacyOverlayView?.removeFromSuperview()
-            privacyOverlayView = nil
+            // Hide without destroying so Driver / focus churn can re-show quickly
+            // without tearing down the native view tree mid-frame.
+            privacyOverlayView?.isHidden = true
             if isMaskCurrentlyVisible {
                 isMaskCurrentlyVisible = false
                 emitEvent(type: "maskHidden", metadata: ["reason": reason])

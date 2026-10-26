@@ -23,6 +23,24 @@ void main() {
       expect(capabilities.supportsNativeAppSwitcherMask, isTrue);
       expect(capabilities.limitations, isNotEmpty);
     }
+    if (!kIsWeb && Platform.isMacOS) {
+      expect(capabilities.platform, 'macos');
+      expect(capabilities.supportsHardwareAntiScreenshot, isTrue);
+      expect(capabilities.supportsHardwareAntiRecording, isTrue);
+      expect(capabilities.supportsScreenshotDetection, isTrue);
+      expect(capabilities.supportsRecordingDetection, isTrue);
+      expect(capabilities.supportsNativeAppSwitcherMask, isTrue);
+      expect(capabilities.supportsNativeBlurEffect, isTrue);
+    }
+    if (!kIsWeb && Platform.isIOS) {
+      expect(capabilities.platform, 'ios');
+      expect(capabilities.supportsHardwareAntiScreenshot, isTrue);
+      expect(capabilities.supportsHardwareAntiRecording, isTrue);
+      expect(capabilities.supportsScreenshotDetection, isTrue);
+      expect(capabilities.supportsRecordingDetection, isTrue);
+      expect(capabilities.supportsNativeAppSwitcherMask, isTrue);
+      expect(capabilities.supportsNativeBlurEffect, isTrue);
+    }
 
     expect(await plugin.enableSecureScreen(), isTrue);
     expect(await plugin.isSecureScreenEnabled(), isTrue);

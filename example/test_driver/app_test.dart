@@ -87,6 +87,24 @@ void main() {
       expect(caps['supportsHardwareAntiRecording'], isTrue);
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
     }
+    if (Platform.isMacOS) {
+      expect(status['platform'], 'macos');
+      expect(caps['supportsHardwareAntiScreenshot'], isTrue);
+      expect(caps['supportsHardwareAntiRecording'], isTrue);
+      expect(caps['supportsScreenshotDetection'], isTrue);
+      expect(caps['supportsRecordingDetection'], isTrue);
+      expect(caps['supportsNativeAppSwitcherMask'], isTrue);
+      expect(caps['supportsNativeBlurEffect'], isTrue);
+    }
+    if (Platform.isIOS) {
+      expect(status['platform'], 'ios');
+      expect(caps['supportsHardwareAntiScreenshot'], isTrue);
+      expect(caps['supportsHardwareAntiRecording'], isTrue);
+      expect(caps['supportsScreenshotDetection'], isTrue);
+      expect(caps['supportsRecordingDetection'], isTrue);
+      expect(caps['supportsNativeAppSwitcherMask'], isTrue);
+      expect(caps['supportsNativeBlurEffect'], isTrue);
+    }
   });
 
   test('UI buttons enable and disable secure screen', () async {

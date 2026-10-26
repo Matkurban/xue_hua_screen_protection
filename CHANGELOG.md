@@ -1,3 +1,10 @@
+## 1.0.3
+
+* macOS: real screen-recording heuristics via `CGWindowListCopyWindowInfo` and capture helper apps (was only `screencaptureui`); clipboard screenshot UTIs via pasteboard polling.
+* macOS / iOS: hide privacy overlay without destroying the native view (Driver-friendly, matches Linux).
+* Example: set `version` to clear iOS build name/number warnings; extend flutter_driver and integration_test with macOS/iOS capability assertions.
+* Verified green on macOS (unit, integration_test, flutter_driver ×9) and iOS simulator smoke (integration_test).
+
 ## 1.0.2
 
 * Linux: real privacy overlay for app-switcher / focus-out masking; secure-screen enables mask fallback and cleanly undoes it on disable; focus-out debounce; hide overlay without destroying (fixes Flutter Driver input).
