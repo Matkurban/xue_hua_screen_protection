@@ -69,7 +69,12 @@ class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _applyConfiguration();
+    // Defer native calls until after the first frame so route pushes / Driver
+    // taps can settle before secure-screen + mask configuration runs.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _applyConfiguration();
+    });
     _eventSubscription = _plugin.onProtectionEvent.listen(_handleEvent);
   }
 

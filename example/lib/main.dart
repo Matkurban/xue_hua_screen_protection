@@ -3,6 +3,34 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
 
+/// Shared navigator key so Flutter Driver data handlers can push/pop routes.
+final GlobalKey<NavigatorState> demoNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Pushes the scoped vault demo page (used by Flutter Driver).
+bool openScopedVaultFromDriver() {
+  final nav = demoNavigatorKey.currentState;
+  if (nav == null) return false;
+  nav.push(
+    PageRouteBuilder<void>(
+      pageBuilder: (BuildContext context, Animation<double> animation,
+          Animation<double> secondaryAnimation) {
+        return const ScopedVaultDemoPage();
+      },
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+    ),
+  );
+  return true;
+}
+
+/// Pops the current route if possible (used by Flutter Driver).
+bool popRouteFromDriver() {
+  final nav = demoNavigatorKey.currentState;
+  if (nav == null || !nav.canPop()) return false;
+  nav.pop();
+  return true;
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ScreenProtectionDemoApp());
@@ -16,6 +44,7 @@ class ScreenProtectionDemoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: demoNavigatorKey,
       title: 'XueHua Screen Protection Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -157,8 +186,13 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
 
   void _openScopedVaultPage() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => const ScopedVaultDemoPage(),
+      PageRouteBuilder<void>(
+        pageBuilder: (BuildContext context, Animation<double> animation,
+            Animation<double> secondaryAnimation) {
+          return const ScopedVaultDemoPage();
+        },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
     );
   }
@@ -181,10 +215,10 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
             icon: const Icon(Icons.refresh_rounded),
             onPressed: _initializePluginState,
           ),
-          TextButton.icon(
-            onPressed: _openScopedVaultPage,
+          IconButton(
+            tooltip: 'Scoped Vault Page',
             icon: const Icon(Icons.enhanced_encryption_rounded),
-            label: const Text('Scoped Vault Page'),
+            onPressed: _openScopedVaultPage,
           ),
           const SizedBox(width: 8),
         ],
@@ -248,7 +282,11 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
                   ),
                 ),
                 Chip(
-                  label: Text(isSecured ? 'PROTECTED' : 'UNPROTECTED'),
+                  key: const ValueKey('protection_status_chip'),
+                  label: Text(
+                    isSecured ? 'PROTECTED' : 'UNPROTECTED',
+                    key: const ValueKey('protection_status_label'),
+                  ),
                   backgroundColor: isSecured
                       ? Colors.green.withValues(alpha: 0.18)
                       : Colors.orange.withValues(alpha: 0.18),
@@ -264,24 +302,40 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               ),
             ),
             const SizedBox(height: 8),
+            Text(
+              'status:'
+              'secure=${isSecured ? 1 : 0};'
+              'mask=${(status?.isAppSwitcherMaskEnabled ?? _maskEnabled) ? 1 : 0};'
+              'recording=${isRecorded ? 1 : 0};'
+              'visible=${status?.isMaskCurrentlyVisible == true ? 1 : 0};'
+              'platform=${status?.platform ?? _capabilities?.platform ?? "unknown"}',
+              key: const ValueKey('status_line'),
+              style: const TextStyle(fontSize: 1, color: Color(0x00000000)),
+            ),
             Wrap(
               spacing: 12,
               runSpacing: 8,
               children: <Widget>[
-                _buildStatusBadge(
-                  icon: Icons.devices_rounded,
-                  label:
-                      'Platform: ${status?.platform ?? _capabilities?.platform ?? "..."}',
+                KeyedSubtree(
+                  key: const ValueKey('platform_badge'),
+                  child: _buildStatusBadge(
+                    icon: Icons.devices_rounded,
+                    label:
+                        'Platform: ${status?.platform ?? _capabilities?.platform ?? "..."}',
+                  ),
                 ),
                 _buildStatusBadge(
                   icon: Icons.fiber_manual_record_rounded,
                   label: isRecorded ? 'Recording: ACTIVE' : 'Recording: Idle',
                   isAlert: isRecorded,
                 ),
-                _buildStatusBadge(
-                  icon: Icons.blur_on_rounded,
-                  label:
-                      'App Switcher Mask: ${(status?.isAppSwitcherMaskEnabled ?? _maskEnabled) ? "ON" : "OFF"}',
+                KeyedSubtree(
+                  key: const ValueKey('mask_status_badge'),
+                  child: _buildStatusBadge(
+                    icon: Icons.blur_on_rounded,
+                    label:
+                        'App Switcher Mask: ${(status?.isAppSwitcherMaskEnabled ?? _maskEnabled) ? "ON" : "OFF"}',
+                  ),
                 ),
               ],
             ),
@@ -337,6 +391,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
             ),
             const SizedBox(height: 4),
             SwitchListTile(
+              key: const ValueKey('secure_screen_switch'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Enable Hardware Secure Screen'),
               subtitle: const Text(
@@ -351,19 +406,28 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               runSpacing: 8,
               children: <Widget>[
                 FilledButton.icon(
+                  key: const ValueKey('enable_protection_button'),
                   onPressed: () => _toggleSecureScreen(true),
                   icon: const Icon(Icons.lock_rounded),
                   label: const Text('Enable Protection'),
                 ),
                 OutlinedButton.icon(
+                  key: const ValueKey('disable_protection_button'),
                   onPressed: () => _toggleSecureScreen(false),
                   icon: const Icon(Icons.lock_open_rounded),
                   label: const Text('Disable Protection'),
                 ),
                 ElevatedButton.icon(
+                  key: const ValueKey('preview_mask_button'),
                   onPressed: _previewPrivacyMaskFor3Seconds,
                   icon: const Icon(Icons.visibility_off_rounded),
                   label: const Text('Preview Privacy Mask (3s)'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('scoped_vault_button'),
+                  onPressed: _openScopedVaultPage,
+                  icon: const Icon(Icons.enhanced_encryption_rounded),
+                  label: const Text('Scoped Vault Page'),
                 ),
               ],
             ),
@@ -387,6 +451,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               ),
             ),
             SwitchListTile(
+              key: const ValueKey('mask_enabled_switch'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Enable Background / App-Switcher Mask'),
               subtitle: const Text(
@@ -401,6 +466,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               },
             ),
             SwitchListTile(
+              key: const ValueKey('protect_on_blur_switch'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Trigger Mask on Window Focus Loss'),
               subtitle: const Text(
@@ -420,6 +486,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
                 const Text('Mask Style: '),
                 const SizedBox(width: 12),
                 SegmentedButton<ScreenProtectionMaskStyle>(
+                  key: const ValueKey('mask_style_segmented'),
                   segments: const <ButtonSegment<ScreenProtectionMaskStyle>>[
                     ButtonSegment<ScreenProtectionMaskStyle>(
                       value: ScreenProtectionMaskStyle.blur,
@@ -485,6 +552,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               ),
             ),
             SwitchListTile(
+              key: const ValueKey('watermark_switch'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Show Diagonal Security Watermark Overlay'),
               subtitle: Text('$_watermarkText • $_watermarkSubText'),
@@ -548,6 +616,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
               ),
             ),
             SwitchListTile(
+              key: const ValueKey('web_context_menu_switch'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Disable Right-Click Context Menu'),
               value: _webDisableContextMenu,
@@ -677,6 +746,7 @@ class _ScreenProtectionHomePageState extends State<ScreenProtectionHomePage> {
                 Flexible(
                   child: Text(
                     '6. Real-Time Security Event Stream (${_eventLog.length})',
+                    key: const ValueKey('event_log_title'),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -752,6 +822,7 @@ class ScopedVaultDemoPage extends StatelessWidget {
         );
       },
       child: Scaffold(
+        key: const ValueKey('scoped_vault_page'),
         appBar: AppBar(title: const Text('Declarative ScreenProtectionScope')),
         body: const Center(
           child: Padding(
