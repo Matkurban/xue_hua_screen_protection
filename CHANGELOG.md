@@ -1,3 +1,8 @@
+## 1.0.5
+
+* Example: expand `integration_test` coverage for blur mask, `setSecureScreen`, `ScreenProtectionWatermark`, and `ScreenProtectionScope`; add official `test_driver/integration_test.dart` driver.
+* Verified green on iOS simulators ios17/18/26/27 (`flutter drive` + integration_test); `flutter analyze` clean; Xcode build with zero warnings.
+
 ## 1.0.4
 
 * Android: tighten screen-recording heuristics to name-based virtual/mirror displays only (avoids false positives on emulators / multi-display OEMs that previously treated every non-presentation secondary display as recording).
