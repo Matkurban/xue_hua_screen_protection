@@ -42,6 +42,22 @@ void main() {
       expect(capabilities.supportsNativeBlurEffect, isTrue);
     }
 
+    if (!kIsWeb && Platform.isAndroid) {
+      expect(capabilities.platform, 'android');
+      expect(capabilities.supportsHardwareAntiScreenshot, isTrue);
+      expect(capabilities.supportsHardwareAntiRecording, isTrue);
+      expect(capabilities.supportsScreenshotDetection, isTrue);
+      expect(capabilities.supportsRecordingDetection, isTrue);
+      expect(capabilities.supportsNativeAppSwitcherMask, isTrue);
+      final apiMatch = RegExp(r'API (\d+)').firstMatch(capabilities.osVersion);
+      expect(apiMatch, isNotNull);
+      final api = int.parse(apiMatch!.group(1)!);
+      expect(capabilities.supportsNativeBlurEffect, api >= 31);
+      if (api < 34) {
+        expect(capabilities.limitations, isNotEmpty);
+      }
+    }
+
     expect(await plugin.enableSecureScreen(), isTrue);
     expect(await plugin.isSecureScreenEnabled(), isTrue);
     var status = await plugin.getProtectionStatus();

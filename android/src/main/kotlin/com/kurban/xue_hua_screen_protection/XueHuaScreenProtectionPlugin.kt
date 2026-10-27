@@ -412,11 +412,11 @@ class XueHuaScreenProtectionPlugin :
         var suspiciousDisplayFound = false
         for (display in displays) {
             if (display.displayId == Display.DEFAULT_DISPLAY) continue
-            val flags = display.flags
             val name = (display.name ?: "").lowercase()
+            // Name-based heuristics only. Treating every non-presentation secondary
+            // display as "recording" false-positives on emulators / multi-display OEMs.
             val isVirtualOrMirror =
-                (flags and Display.FLAG_PRESENTATION) == 0 ||
-                        name.contains("record") ||
+                name.contains("record") ||
                         name.contains("screencast") ||
                         name.contains("scrcpy") ||
                         name.contains("virtual") ||
@@ -521,6 +521,8 @@ class XueHuaScreenProtectionPlugin :
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
                     )
+                } else {
+                    overlay.visibility = View.VISIBLE
                 }
                 overlay.bringToFront()
                 if (!isMaskCurrentlyVisible) {
@@ -532,8 +534,10 @@ class XueHuaScreenProtectionPlugin :
                     contentView?.setRenderEffect(null)
                 }
                 val overlay = decorView.findViewWithTag<View>(MASK_VIEW_TAG)
+                // Hide without destroying so rapid show/hide (Driver / automation)
+                // does not thrash view hierarchy — matches Linux/macOS/iOS.
                 if (overlay != null) {
-                    decorView.removeView(overlay)
+                    overlay.visibility = View.GONE
                 }
                 if (isMaskCurrentlyVisible) {
                     isMaskCurrentlyVisible = false

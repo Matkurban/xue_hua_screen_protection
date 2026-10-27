@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:test/test.dart';
 
@@ -72,8 +70,10 @@ void main() {
     expect(status['platform'], isNotEmpty);
     final caps = await requestJson('get_capabilities');
     expect(caps['platform'], status['platform']);
-    if (Platform.isLinux) {
-      expect(status['platform'], 'linux');
+    // Driver tests run on the host; assert against the *device* platform so
+    // Mac-hosted Android / iOS emulator drives don't match host Platform.isX.
+    final platform = status['platform'] as String;
+    if (platform == 'linux') {
       expect(caps['supportsHardwareAntiScreenshot'], isFalse);
       expect(caps['supportsHardwareAntiRecording'], isFalse);
       expect(caps['supportsScreenshotDetection'], isFalse);
@@ -81,14 +81,12 @@ void main() {
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
       expect((caps['limitations'] as List).isNotEmpty, isTrue);
     }
-    if (Platform.isWindows) {
-      expect(status['platform'], 'windows');
+    if (platform == 'windows') {
       expect(caps['supportsHardwareAntiScreenshot'], isTrue);
       expect(caps['supportsHardwareAntiRecording'], isTrue);
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
     }
-    if (Platform.isMacOS) {
-      expect(status['platform'], 'macos');
+    if (platform == 'macos') {
       expect(caps['supportsHardwareAntiScreenshot'], isTrue);
       expect(caps['supportsHardwareAntiRecording'], isTrue);
       expect(caps['supportsScreenshotDetection'], isTrue);
@@ -96,14 +94,28 @@ void main() {
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
       expect(caps['supportsNativeBlurEffect'], isTrue);
     }
-    if (Platform.isIOS) {
-      expect(status['platform'], 'ios');
+    if (platform == 'ios') {
       expect(caps['supportsHardwareAntiScreenshot'], isTrue);
       expect(caps['supportsHardwareAntiRecording'], isTrue);
       expect(caps['supportsScreenshotDetection'], isTrue);
       expect(caps['supportsRecordingDetection'], isTrue);
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
       expect(caps['supportsNativeBlurEffect'], isTrue);
+    }
+    if (platform == 'android') {
+      expect(caps['supportsHardwareAntiScreenshot'], isTrue);
+      expect(caps['supportsHardwareAntiRecording'], isTrue);
+      expect(caps['supportsScreenshotDetection'], isTrue);
+      expect(caps['supportsRecordingDetection'], isTrue);
+      expect(caps['supportsNativeAppSwitcherMask'], isTrue);
+      final os = caps['osVersion'] as String;
+      final apiMatch = RegExp(r'API (\d+)').firstMatch(os);
+      expect(apiMatch, isNotNull, reason: 'osVersion should include API level: $os');
+      final api = int.parse(apiMatch!.group(1)!);
+      expect(caps['supportsNativeBlurEffect'], api >= 31);
+      if (api < 34) {
+        expect((caps['limitations'] as List).isNotEmpty, isTrue);
+      }
     }
   });
 
@@ -114,7 +126,7 @@ void main() {
       (s) => s['isSecureScreenEnabled'] == true,
       label: 'secure enabled via Enable button',
     );
-    if (Platform.isLinux) {
+    if ((await readStatus())['platform'] == 'linux') {
       expect((await readStatus())['isAppSwitcherMaskEnabled'], isTrue);
     }
 
@@ -212,7 +224,12 @@ void main() {
 
   test('web protection configure returns native-host result', () async {
     final web = await requestJson('configure_web');
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    final platform = (await readStatus())['platform'];
+    if (platform == 'linux' ||
+        platform == 'windows' ||
+        platform == 'macos' ||
+        platform == 'android' ||
+        platform == 'ios') {
       expect(web['ok'], isFalse);
     }
   });

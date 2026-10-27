@@ -1,3 +1,10 @@
+## 1.0.4
+
+* Android: tighten screen-recording heuristics to name-based virtual/mirror displays only (avoids false positives on emulators / multi-display OEMs that previously treated every non-presentation secondary display as recording).
+* Android: hide privacy overlay with `View.GONE` instead of removing it (matches Linux/macOS/iOS; avoids thrashing the view hierarchy under rapid Driver show/hide).
+* Example: flutter_driver and integration_test assert Android capabilities against the *device* platform (so Mac-hosted emulator drives work); include API-level blur / limitations checks.
+* Verified green on Android emulators API 28/30/34/36 (`xhsp_*`): flutter_driver ×9 and integration_test ×3 each; `flutter analyze` clean.
+
 ## 1.0.3
 
 * macOS: real screen-recording heuristics via `CGWindowListCopyWindowInfo` and capture helper apps (was only `screencaptureui`); clipboard screenshot UTIs via pasteboard polling.
