@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
@@ -135,5 +136,80 @@ void main() {
       expect(result, isFalse);
     }
     expect(await plugin.isScreenBeingRecorded(), isFalse);
+  });
+
+  testWidgets('setSecureScreen direct toggle and blur mask config', (
+    WidgetTester tester,
+  ) async {
+    expect(await plugin.setSecureScreen(true), isTrue);
+    expect(await plugin.isSecureScreenEnabled(), isTrue);
+
+    final blurConfigured = await plugin.configureAppSwitcherProtection(
+      const ScreenProtectionMaskConfig(
+        enabled: true,
+        style: ScreenProtectionMaskStyle.blur,
+        blurSigma: 24,
+        title: 'Blur Mask',
+        subtitle: 'integration blur',
+        showLockIcon: true,
+        protectOnWindowBlur: true,
+      ),
+    );
+    expect(blurConfigured, isTrue);
+
+    expect(await plugin.showPrivacyMask(), isTrue);
+    await tester.pump(const Duration(milliseconds: 200));
+    var status = await plugin.getProtectionStatus();
+    expect(status.isMaskCurrentlyVisible, isTrue);
+    expect(status.isAppSwitcherMaskEnabled, isTrue);
+    expect(status.isSecureScreenEnabled, isTrue);
+
+    expect(await plugin.hidePrivacyMask(), isTrue);
+    expect(await plugin.setSecureScreen(false), isTrue);
+    expect(await plugin.isSecureScreenEnabled(), isFalse);
+    status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isFalse);
+    expect(status.isMaskCurrentlyVisible, isFalse);
+  });
+
+  testWidgets('ScreenProtectionWatermark and Scope smoke mount', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ScreenProtectionWatermark(
+            text: 'IT-USER',
+            subText: 'integration',
+            child: Text('watermark-child', key: ValueKey('watermark_child')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('watermark_child')), findsOneWidget);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ScreenProtectionScope(
+          enableSecureScreen: true,
+          watermarkText: 'SCOPE',
+          watermarkSubText: 'smoke',
+          child: Scaffold(
+            body: Text('scope-child', key: ValueKey('scope_child')),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(); // first frame
+    await tester.pump(const Duration(milliseconds: 300)); // post-frame config
+    expect(find.byKey(const ValueKey('scope_child')), findsOneWidget);
+
+    // Scope enables secure screen after post-frame callback.
+    expect(await plugin.isSecureScreenEnabled(), isTrue);
+
+    // Unmount to restore (dispose path).
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
   });
 }
