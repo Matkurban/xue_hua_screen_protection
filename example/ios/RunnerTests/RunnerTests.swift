@@ -31,6 +31,40 @@ class RunnerTests: XCTestCase {
       queryExpectation.fulfill()
     }
     waitForExpectations(timeout: 1)
+
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let window = scenes.flatMap(\.windows).first { !$0.isHidden } ?? UIApplication.shared.delegate?.window ?? nil
+    if let window = window {
+      let winMaskEnabled = (window.layer.value(forKey: "disableUpdateMask") as? NSNumber)?.intValue ?? 0
+      XCTAssertNotEqual(winMaskEnabled, 0, "window.layer disableUpdateMask should be set when enabled")
+    }
+
+    let disableCall = FlutterMethodCall(
+      methodName: "setSecureScreen",
+      arguments: ["enabled": false]
+    )
+    let disableExpectation = expectation(description: "disableSecureScreen completes")
+    plugin.handle(disableCall) { result in
+      XCTAssertEqual(result as? Bool, true)
+      disableExpectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
+
+    let queryDisabledExpectation = expectation(description: "isSecureScreenEnabled after disable completes")
+    plugin.handle(queryCall) { result in
+      XCTAssertEqual(result as? Bool, false)
+      queryDisabledExpectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
+
+    if let window = window {
+      let winMaskDisabled = (window.layer.value(forKey: "disableUpdateMask") as? NSNumber)?.intValue ?? -1
+      let rootMaskDisabled = (window.rootViewController?.view.layer.value(forKey: "disableUpdateMask") as? NSNumber)?.intValue ?? -1
+      let superlayerMaskDisabled = (window.layer.superlayer?.value(forKey: "disableUpdateMask") as? NSNumber)?.intValue ?? -1
+      XCTAssertEqual(winMaskDisabled, 0, "window.layer disableUpdateMask must be cleared on disable")
+      XCTAssertEqual(rootMaskDisabled, 0, "rootViewController.view.layer disableUpdateMask must be cleared on disable")
+      XCTAssertEqual(superlayerMaskDisabled, 0, "window.layer.superlayer disableUpdateMask must be cleared on disable")
+    }
   }
 
   func testGetCapabilitiesReturnsIOS() {

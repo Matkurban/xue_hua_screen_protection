@@ -31,6 +31,24 @@ class RunnerTests: XCTestCase {
       queryExpectation.fulfill()
     }
     waitForExpectations(timeout: 1)
+
+    let disableCall = FlutterMethodCall(
+      methodName: "setSecureScreen",
+      arguments: ["enabled": false]
+    )
+    let disableExpectation = expectation(description: "disableSecureScreen completes")
+    plugin.handle(disableCall) { result in
+      XCTAssertEqual(result as? Bool, true)
+      disableExpectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
+
+    let queryDisabledExpectation = expectation(description: "isSecureScreenEnabled after disable completes")
+    plugin.handle(queryCall) { result in
+      XCTAssertEqual(result as? Bool, false)
+      queryDisabledExpectation.fulfill()
+    }
+    waitForExpectations(timeout: 1)
   }
 
   func testGetCapabilitiesReturnsMacOS() {

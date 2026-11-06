@@ -175,6 +175,12 @@ void main() {
   testWidgets('ScreenProtectionWatermark and Scope smoke mount', (
     WidgetTester tester,
   ) async {
+    // Ensure clean imperative baseline before testing declarative Scope lifecycle.
+    await plugin.disableSecureScreen();
+    await plugin.configureAppSwitcherProtection(
+      const ScreenProtectionMaskConfig.disabled(),
+    );
+
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -189,9 +195,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('watermark_child')), findsOneWidget);
 
+    final navKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      const MaterialApp(
-        home: ScreenProtectionScope(
+      MaterialApp(
+        navigatorKey: navKey,
+        home: const ScreenProtectionScope(
           enableSecureScreen: true,
           watermarkText: 'SCOPE',
           watermarkSubText: 'smoke',
@@ -205,11 +213,38 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300)); // post-frame config
     expect(find.byKey(const ValueKey('scope_child')), findsOneWidget);
 
-    // Scope enables secure screen after post-frame callback.
+    // Scope enables both secure screen and app-switcher mask after post-frame callback.
     expect(await plugin.isSecureScreenEnabled(), isTrue);
+    var status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isTrue);
+    expect(status.isAppSwitcherMaskEnabled, isTrue);
 
-    // Unmount to restore (dispose path).
+    // Pushing an unprotected route on top disables protection even while Scope stays mounted underneath.
+    navKey.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(
+          body: Text('next-unprotected-page', key: ValueKey('next_page')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('next_page')), findsOneWidget);
+    status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isFalse);
+    expect(status.isAppSwitcherMaskEnabled, isFalse);
+
+    // Popping back to Scope re-enables protection automatically.
+    navKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isTrue);
+    expect(status.isAppSwitcherMaskEnabled, isTrue);
+
+    // Unmount to restore (dispose path) -> both secure screen and mask must disable.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
+    status = await plugin.getProtectionStatus();
+    expect(status.isSecureScreenEnabled, isFalse);
+    expect(status.isAppSwitcherMaskEnabled, isFalse);
   });
 }

@@ -6,7 +6,7 @@ A comprehensive, production-grade cross-platform Flutter plugin for **screen pri
 
 - **Author**: Matkurban (`3496354336@qq.com`)
 - **Repository**: [https://github.com/Matkurban/xue_hua_screen_protection](https://github.com/Matkurban/xue_hua_screen_protection)
-- **Version**: `1.0.0`
+- **Version**: `1.0.6`
 
 ## Features
 
@@ -15,7 +15,7 @@ A comprehensive, production-grade cross-platform Flutter plugin for **screen pri
 - **App Switcher & Inactive Window Privacy Mask**: Automatically covers the application window with a native frosted-glass blur (`RenderEffect`, `UIVisualEffectView`, `NSVisualEffectView`, CSS `backdrop-filter`) or solid shield when entering the background, app switcher, or losing focus.
 - **Web Browser Content Hardening**: Injects `@media print` rules to block printing/PDF export, disables right-click context menus and text/image dragging, and intercepts `PrintScreen`, `Ctrl/Cmd+P`, `Ctrl/Cmd+S`, and DevTools shortcuts.
 - **Declarative Flutter Widgets**:
-  - `ScreenProtectionScope`: Automatically enables screen protection while mounted, shields content during active recording, and restores state on dispose.
+  - `ScreenProtectionScope`: Automatically enables screen protection and app-switcher masks while visible onstage, releases protection when covered by subsequent opaque routes/tabs/sliding panes or disposed, shields content during active recording, and restores previous state when leaving.
   - `ScreenProtectionWatermark`: Renders a high-performance, non-interactive (`IgnorePointer`) diagonal tiled watermark to deter physical camera leaks.
 - **Runtime Capability Inspection**: Query `getCapabilities()` to inspect exact OS support and platform limitations at runtime.
 - **Bundled AI Agent Skill**: Ships with a standard [Dart Package Skill](https://dart.dev/tools/pub/package-skills) in `skills/xue-hua-screen-protection-usage/SKILL.md`.
@@ -37,7 +37,7 @@ Add `xue_hua_screen_protection` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_screen_protection: ^1.0.0
+  xue_hua_screen_protection: ^1.0.6
 ```
 
 Or reference the Git repository directly:
@@ -134,7 +134,7 @@ Future<void> setupScreenSecurity() async {
 
 ### 2. Declarative Route Protection (`ScreenProtectionScope`)
 
-Wrap any sensitive route or subtree with `ScreenProtectionScope` to automatically enable protection when entering the page and restore settings when leaving:
+Wrap any sensitive route or subtree with `ScreenProtectionScope` to automatically enable protection when the page is visible onstage and restore baseline settings when covered by an opaque route, switched to another tab/pane, or disposed (works seamlessly with `Navigator`, `Router`, nested navigators, and multi-column adaptive sliding routers):
 
 ```dart
 import 'package:flutter/material.dart';

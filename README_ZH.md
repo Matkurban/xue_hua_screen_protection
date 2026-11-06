@@ -6,7 +6,7 @@
 
 - **作者**：Matkurban (`3496354336@qq.com`)
 - **仓库地址**：[https://github.com/Matkurban/xue_hua_screen_protection](https://github.com/Matkurban/xue_hua_screen_protection)
-- **当前版本**：`1.0.0`
+- **当前版本**：`1.0.6`
 
 ## 核心特性
 
@@ -15,7 +15,7 @@
 - **切后台 / 多任务切换 / 窗口失焦隐私遮罩**：当应用进入多任务切换界面、退至后台或桌面窗口失去焦点时，自动覆盖原生毛玻璃模糊层（`RenderEffect`、`UIVisualEffectView`、`NSVisualEffectView`、CSS `backdrop-filter`）或纯色安全护盾。
 - **Web 浏览器多维防采集加固**：支持动态注入 `@media print` 禁止打印与导出 PDF、禁用右键菜单、禁止文本选择与图片拖拽，并拦截 `PrintScreen`、`Ctrl/Cmd+P`、`Ctrl/Cmd+S`、`F12` 等快捷键。
 - **声明式 Flutter 保护组件**：
-  - `ScreenProtectionScope`：页面级生命周期保护组件，进入页面自动开启防截屏与遮罩、录屏时自动隐藏敏感内容，退出页面自动恢复。
+  - `ScreenProtectionScope`：页面级可视态生命周期保护组件，页面前台可见时自动开启防截屏与隐私遮罩、录屏时自动隐藏敏感内容；当通过路由跳转进入下一页（被不透明路由覆盖）、切换 Tab、滑出多栏视口或页面销毁时自动解除保护，返回当前页时自动恢复。
   - `ScreenProtectionWatermark`：基于 `CustomPaint` 与 `IgnorePointer` 的高性能斜向平铺防拍屏水印组件。
 - **运行时平台能力自检**：通过 `getCapabilities()` 与 `getProtectionStatus()` 动态查询当前宿主系统的原生支持矩阵与平台限制说明。
 - **内置标准 AI Package Skill**：遵循 [Dart 官方 Package Skills 规范](https://dart.dev/tools/pub/package-skills)，随包内置 `skills/xue-hua-screen-protection-usage/SKILL.md`。
@@ -37,7 +37,7 @@
 
 ```yaml
 dependencies:
-  xue_hua_screen_protection: ^1.0.0
+  xue_hua_screen_protection: ^1.0.6
 ```
 
 或者直接通过 Git 仓库依赖：
@@ -132,7 +132,7 @@ Future<void> initScreenProtection() async {
 
 ### 2. 声明式页面级保护组件 (`ScreenProtectionScope`)
 
-使用 `ScreenProtectionScope` 包裹敏感业务页面（如账单详情、密钥展示、内部文档），组件挂载时自动开启防截屏与遮罩，检测到录屏时自动展示防窥护盾，页面销毁时自动恢复：
+使用 `ScreenProtectionScope` 包裹敏感业务页面（如账单详情、密钥展示、内部文档），页面前台可见时自动开启防截屏与隐私遮罩，检测到录屏时自动展示防窥护盾；当路由跳转到下一页、切换分支 Tab、滑出多栏视口或页面销毁时自动恢复状态（无缝兼容标准 `Navigator`、嵌套路由及 `xue_hua_adaptive_sliding_layout` 等自定义多栏路由）：
 
 ```dart
 import 'package:flutter/material.dart';

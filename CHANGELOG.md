@@ -1,3 +1,11 @@
+## 1.0.6
+
+* Fix `ScreenProtectionScope` leaving screen protection or app-switcher privacy mask (`configureAppSwitcherProtection`) active after the protected page is disposed or navigated away from.
+* Add `ScreenProtectionCoordinator` to coordinate declarative `ScreenProtectionScope` instances with imperative `XueHuaScreenProtection.instance` baseline state and serialize async platform channel updates across overlapping route transitions (`Protected Page A -> Protected Page B`).
+* Automatically detect route coverage and offstage states across standard `Navigator`, nested navigators, `IndexedStack` / `Visibility`, `Offstage`, and multi-column sliding pane routers (`xue_hua_adaptive_sliding_layout`), immediately releasing protection when covered by an opaque route or slid off-viewport while keeping protection active underneath non-opaque dialogs/sheets and restoring it on `pop`.
+* Gate `ScreenProtectionScope` `onScreenshotTaken`, `onRecordingStateChanged`, and background shield overlays on onstage visibility, and re-sync `isScreenBeingRecorded()` when returning onstage.
+* Harden Android, iOS, macOS, Linux, and Web native/DOM state synchronization on rapid `setSecureScreen` and `configureAppSwitcherProtection` enable/disable transitions.
+
 ## 1.0.5
 
 * Example: expand `integration_test` coverage for blur mask, `setSecureScreen`, `ScreenProtectionWatermark`, and `ScreenProtectionScope`; add official `test_driver/integration_test.dart` driver.

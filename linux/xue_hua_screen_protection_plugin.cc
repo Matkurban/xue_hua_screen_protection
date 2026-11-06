@@ -424,6 +424,10 @@ static void xue_hua_screen_protection_plugin_handle_method_call(
       // Undo only the auto-armed fallback; keep explicit user mask config.
       self->mask_enabled = FALSE;
       self->mask_enabled_by_secure = FALSE;
+      if (self->focus_out_timeout_id != 0) {
+        g_source_remove(self->focus_out_timeout_id);
+        self->focus_out_timeout_id = 0;
+      }
       set_mask_visible(self, FALSE, "secure_disabled");
     }
     g_autoptr(FlValue) res = fl_value_new_bool(TRUE);
@@ -483,6 +487,10 @@ static void xue_hua_screen_protection_plugin_handle_method_call(
       }
     }
     if (!self->mask_enabled || g_strcmp0(self->mask_style, "none") == 0) {
+      if (self->focus_out_timeout_id != 0) {
+        g_source_remove(self->focus_out_timeout_id);
+        self->focus_out_timeout_id = 0;
+      }
       set_mask_visible(self, FALSE, "config_disabled");
     } else {
       apply_mask_styles(self);

@@ -68,7 +68,9 @@ class XueHuaScreenProtectionPlugin :
     private var eventSink: EventChannel.EventSink? = null
     private var applicationContext: Context? = null
     private var activity: Activity? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler: Handler by lazy(LazyThreadSafetyMode.NONE) {
+        Handler(Looper.getMainLooper())
+    }
 
     // Protection state
     private var isSecureScreenEnabled: Boolean = false
@@ -79,7 +81,7 @@ class XueHuaScreenProtectionPlugin :
     private var maskEnabled: Boolean = false
     private var maskStyle: String = "blur"
     private var maskBlurSigma: Float = 20.0f
-    private var maskBackgroundColor: Int = Color.argb(235, 15, 23, 42)
+    private var maskBackgroundColor: Int = 0xEB0F172A.toInt()
     private var maskTextColor: Int = Color.WHITE
     private var maskTitle: String = "Privacy Protected"
     private var maskSubtitle: String = "Screen content is hidden to protect sensitive information."
@@ -147,7 +149,7 @@ class XueHuaScreenProtectionPlugin :
                 maskBlurSigma = (call.argument<Number>("blurSigma")?.toFloat() ?: 20.0f)
                     .coerceIn(0.0f, 50.0f)
                 maskBackgroundColor = (call.argument<Number>("backgroundColor")?.toInt())
-                    ?: Color.argb(235, 15, 23, 42)
+                    ?: 0xEB0F172A.toInt()
                 maskTextColor = (call.argument<Number>("textColor")?.toInt()) ?: Color.WHITE
                 maskTitle = call.argument<String>("title") ?: "Privacy Protected"
                 maskSubtitle = call.argument<String>("subtitle") ?: ""
@@ -272,7 +274,7 @@ class XueHuaScreenProtectionPlugin :
         isSecureScreenEnabled = enabled
         val currentActivity = activity ?: return true
         currentActivity.runOnUiThread {
-            if (enabled) {
+            if (isSecureScreenEnabled) {
                 currentActivity.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             } else {
                 currentActivity.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

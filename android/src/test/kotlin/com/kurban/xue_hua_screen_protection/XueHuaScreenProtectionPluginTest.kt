@@ -30,5 +30,60 @@ internal class XueHuaScreenProtectionPluginTest {
         plugin.onMethodCall(queryCall, queryResult)
 
         Mockito.verify(queryResult).success(true)
+
+        val disableCall = MethodCall("setSecureScreen", mapOf("enabled" to false))
+        val disableResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(disableCall, disableResult)
+        Mockito.verify(disableResult).success(true)
+
+        val queryAfterDisableResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(queryCall, queryAfterDisableResult)
+        Mockito.verify(queryAfterDisableResult).success(false)
+    }
+
+    @Test
+    fun onMethodCall_configureAppSwitcherProtection_togglesMaskStatus() {
+        val plugin = XueHuaScreenProtectionPlugin()
+
+        val enableMaskCall = MethodCall(
+            "configureAppSwitcherProtection",
+            mapOf("enabled" to true, "style" to "blur")
+        )
+        val enableMaskResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(enableMaskCall, enableMaskResult)
+        Mockito.verify(enableMaskResult).success(true)
+
+        val statusCall = MethodCall("getProtectionStatus", null)
+        val statusEnabledResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(statusCall, statusEnabledResult)
+        Mockito.verify(statusEnabledResult).success(
+            mapOf(
+                "isSecureScreenEnabled" to false,
+                "isAppSwitcherMaskEnabled" to true,
+                "isScreenBeingRecorded" to false,
+                "isMaskCurrentlyVisible" to false,
+                "platform" to "android"
+            )
+        )
+
+        val disableMaskCall = MethodCall(
+            "configureAppSwitcherProtection",
+            mapOf("enabled" to false, "style" to "none")
+        )
+        val disableMaskResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(disableMaskCall, disableMaskResult)
+        Mockito.verify(disableMaskResult).success(true)
+
+        val statusDisabledResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        plugin.onMethodCall(statusCall, statusDisabledResult)
+        Mockito.verify(statusDisabledResult).success(
+            mapOf(
+                "isSecureScreenEnabled" to false,
+                "isAppSwitcherMaskEnabled" to false,
+                "isScreenBeingRecorded" to false,
+                "isMaskCurrentlyVisible" to false,
+                "platform" to "android"
+            )
+        )
     }
 }

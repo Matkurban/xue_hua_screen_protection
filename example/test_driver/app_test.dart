@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:test/test.dart';
 
@@ -110,7 +111,11 @@ void main() {
       expect(caps['supportsNativeAppSwitcherMask'], isTrue);
       final os = caps['osVersion'] as String;
       final apiMatch = RegExp(r'API (\d+)').firstMatch(os);
-      expect(apiMatch, isNotNull, reason: 'osVersion should include API level: $os');
+      expect(
+        apiMatch,
+        isNotNull,
+        reason: 'osVersion should include API level: $os',
+      );
       final api = int.parse(apiMatch!.group(1)!);
       expect(caps['supportsNativeBlurEffect'], api >= 31);
       if (api < 34) {
@@ -179,13 +184,21 @@ void main() {
     await driver.waitFor(find.byValueKey('scoped_vault_page'));
     await driver.waitFor(find.text('Protected by ScreenProtectionScope'));
     await waitUntil(
-      (s) => s['isSecureScreenEnabled'] == true,
-      label: 'secure enabled by ScreenProtectionScope',
+      (s) =>
+          s['isSecureScreenEnabled'] == true &&
+          s['isAppSwitcherMaskEnabled'] == true,
+      label: 'secure and mask enabled by ScreenProtectionScope',
     );
     final popped = await requestJson('pop_route');
     expect(popped['ok'], isTrue);
     await driver.waitFor(find.text('XueHua Screen Protection'));
     await driver.waitFor(find.byValueKey('scoped_vault_button'));
+    await waitUntil(
+      (s) =>
+          s['isSecureScreenEnabled'] == false &&
+          s['isAppSwitcherMaskEnabled'] == false,
+      label: 'secure and mask automatically disabled after popping ScreenProtectionScope',
+    );
     await resetProtection();
   }, timeout: const Timeout(Duration(seconds: 60)));
 

@@ -23,7 +23,7 @@ Provide idiomatic integration patterns, platform difference handling, and best p
 ## Guidelines
 
 - Always call `WidgetsFlutterBinding.ensureInitialized()` before invoking `XueHuaScreenProtection.instance` methods prior to `runApp()`.
-- Prefer `ScreenProtectionScope` for route-scoped protection (such as payment, credential, or confidential document screens) so protection automatically disables when the user leaves the route.
+- Prefer `ScreenProtectionScope` for route-scoped protection (such as payment, credential, or confidential document screens) so both secure-screen flags and app-switcher masks automatically release when the page is covered by a subsequent opaque route, switched offstage in tabs/multi-pane routers, or disposed, and automatically restore when returning onstage.
 - Use `XueHuaScreenProtection.instance.enableSecureScreen()` and `configureAppSwitcherProtection(...)` at startup when the entire application requires persistent protection.
 - Always cancel `StreamSubscription` instances for `onScreenCaptured`, `onScreenRecordingChanged`, or `onProtectionEvent` inside `State.dispose()`.
 - Check `getCapabilities()` when building adaptive security UIs on Linux or Web, and combine `ScreenProtectionWatermark` with `protectOnWindowBlur: true` on platforms where `supportsHardwareAntiScreenshot` is `false`.

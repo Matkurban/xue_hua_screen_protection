@@ -38,11 +38,16 @@ class XueHuaScreenProtectionWeb extends XueHuaScreenProtectionPlatform {
 
   bool _isSecureScreenEnabled = false;
   bool _isMaskVisible = false;
+  Timer? _screenshotFlashTimer;
   ScreenProtectionMaskConfig _maskConfig =
       const ScreenProtectionMaskConfig.disabled();
   WebProtectionConfig _webConfig = const WebProtectionConfig();
 
   bool _listenersAttached = false;
+
+  bool get _isMaskConfigActive =>
+      _maskConfig.enabled &&
+      _maskConfig.style != ScreenProtectionMaskStyle.none;
 
   void _attachDomListeners() {
     if (_listenersAttached) return;
@@ -113,18 +118,12 @@ class XueHuaScreenProtectionWeb extends XueHuaScreenProtectionPlatform {
   }
 
   bool _shouldShowMaskOnBlur() {
-    final maskActive =
-        _maskConfig.enabled &&
-        _maskConfig.style != ScreenProtectionMaskStyle.none;
-    return (maskActive && _maskConfig.protectOnWindowBlur) ||
+    return (_isMaskConfigActive && _maskConfig.protectOnWindowBlur) ||
         (_isSecureScreenEnabled && _webConfig.blurOnVisibilityChange);
   }
 
   void _handleVisibilityOrFocusChange() {
-    final maskActive =
-        _maskConfig.enabled &&
-        _maskConfig.style != ScreenProtectionMaskStyle.none;
-    if (!maskActive &&
+    if (!_isMaskConfigActive &&
         !(_isSecureScreenEnabled && _webConfig.blurOnVisibilityChange)) {
       return;
     }
@@ -153,6 +152,12 @@ class XueHuaScreenProtectionWeb extends XueHuaScreenProtectionPlatform {
         event.stopPropagation();
         // Temporarily flash the privacy mask to obscure rapid clipboard grabs.
         _setMaskDomVisible(true, reason: 'screenshot_key');
+        _screenshotFlashTimer = Timer(const Duration(milliseconds: 800), () {
+          _screenshotFlashTimer = null;
+          if (!web.document.hidden && web.document.hasFocus()) {
+            _setMaskDomVisible(false, reason: 'screenshot_key_timeout');
+          }
+        });
       }
       _emitEvent(
         ScreenProtectionEventType.screenshotTaken,
@@ -234,6 +239,8 @@ body, flt-glass-pane, flutter-view {
   }
 
   void _setMaskDomVisible(bool visible, {String reason = 'manual'}) {
+    _screenshotFlashTimer?.cancel();
+    _screenshotFlashTimer = null;
     if (_isMaskVisible == visible) {
       if (visible) {
         _renderMaskOverlayElement();
@@ -270,7 +277,7 @@ body, flt-glass-pane, flutter-view {
       body.appendChild(overlay);
     }
 
-    final effectiveConfig = _maskConfig.enabled
+    final effectiveConfig = _isMaskConfigActive
         ? _maskConfig
         : const ScreenProtectionMaskConfig();
     final bgCss = _colorToCssRgba(
@@ -379,7 +386,7 @@ font-size: 30px;
   Future<bool> setSecureScreen(bool enabled) async {
     _isSecureScreenEnabled = enabled;
     _syncDomStyles();
-    if (!enabled && !_maskConfig.enabled && _isMaskVisible) {
+    if (!enabled && !_isMaskConfigActive && _isMaskVisible) {
       _setMaskDomVisible(false, reason: 'secure_screen_disabled');
     }
     return true;
@@ -393,7 +400,7 @@ font-size: 30px;
     ScreenProtectionMaskConfig config,
   ) async {
     _maskConfig = config;
-    if (!config.enabled || config.style == ScreenProtectionMaskStyle.none) {
+    if (!_isMaskConfigActive) {
       if (_isMaskVisible && !_isSecureScreenEnabled) {
         _setMaskDomVisible(false, reason: 'mask_disabled');
       }

@@ -1,4 +1,5 @@
 import 'src/models/screen_protection_models.dart';
+import 'src/widgets/screen_protection_coordinator.dart';
 import 'xue_hua_screen_protection_platform_interface.dart';
 
 export 'src/models/screen_protection_models.dart';
@@ -47,14 +48,16 @@ class XueHuaScreenProtection {
   ///   and intercepts capture shortcuts.
   /// - **Linux**: Activates focus-out privacy masking (X11/Wayland compositors
   ///   do not expose an application-level `FLAG_SECURE` equivalent).
-  Future<bool> enableSecureScreen() => _platform.setSecureScreen(true);
+  Future<bool> enableSecureScreen() =>
+      ScreenProtectionCoordinator.instance.setImperativeSecureScreen(true);
 
   /// Disables OS-level anti-screenshot and anti-screen-recording protection.
-  Future<bool> disableSecureScreen() => _platform.setSecureScreen(false);
+  Future<bool> disableSecureScreen() =>
+      ScreenProtectionCoordinator.instance.setImperativeSecureScreen(false);
 
   /// Sets whether OS-level secure screen protection is [enabled].
   Future<bool> setSecureScreen(bool enabled) =>
-      _platform.setSecureScreen(enabled);
+      ScreenProtectionCoordinator.instance.setImperativeSecureScreen(enabled);
 
   /// Queries whether OS-level secure screen protection is currently enabled.
   Future<bool> isSecureScreenEnabled() => _platform.isSecureScreenEnabled();
@@ -63,7 +66,7 @@ class XueHuaScreenProtection {
   /// app switcher, background, or loses window focus.
   Future<bool> configureAppSwitcherProtection(
     ScreenProtectionMaskConfig config,
-  ) => _platform.configureAppSwitcherProtection(config);
+  ) => ScreenProtectionCoordinator.instance.setImperativeMaskConfig(config);
 
   /// Configures Web-specific hardening rules (no-op on native platforms).
   Future<bool> configureWebProtection(WebProtectionConfig config) =>

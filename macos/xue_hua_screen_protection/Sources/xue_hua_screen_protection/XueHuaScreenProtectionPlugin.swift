@@ -82,8 +82,9 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         case "setSecureScreen":
             let args = call.arguments as? [String: Any]
             let enabled = args?["enabled"] as? Bool ?? false
+            isSecureScreenEnabled = enabled
             DispatchQueue.main.async {
-                self.applyWindowSharingType(enabled: enabled)
+                self.applyWindowSharingType(enabled: self.isSecureScreenEnabled)
                 result(true)
             }
 

@@ -4,10 +4,12 @@ import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 
 import '../../xue_hua_screen_protection.dart';
+import 'screen_protection_coordinator.dart';
 
 /// A declarative lifecycle widget that automatically enables screen protection
-/// while mounted and optionally renders an in-app shield during active screen
-/// recording or background transitions.
+/// while visible onstage and restores previous settings when covered, moved
+/// offstage, or disposed. Also optionally renders an in-app shield during
+/// active screen recording or background transitions.
 class ScreenProtectionScope extends StatefulWidget {
   /// Creates a [ScreenProtectionScope].
   const ScreenProtectionScope({
@@ -59,23 +61,54 @@ class ScreenProtectionScope extends StatefulWidget {
 }
 
 class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver
+    implements ScreenProtectionScopeHandle {
   final XueHuaScreenProtection _plugin = XueHuaScreenProtection.instance;
+  final ScreenProtectionCoordinator _coordinator =
+      ScreenProtectionCoordinator.instance;
   StreamSubscription<ScreenProtectionEvent>? _eventSubscription;
   bool _isRecording = false;
+  bool _hasInitializedRecordingState = false;
   bool _isLifecycleInactive = false;
+  bool _isActiveInTree = false;
+  bool _isOnstage = false;
+
+  @override
+  BuildContext get scopeContext => context;
+
+  @override
+  bool get isActiveInTree => mounted && _isActiveInTree;
+
+  @override
+  bool get enableSecureScreen => widget.enableSecureScreen;
+
+  @override
+  ScreenProtectionMaskConfig get maskConfig => widget.maskConfig;
+
+  @override
+  bool get isOnstage => _isOnstage;
 
   @override
   void initState() {
     super.initState();
+    _isActiveInTree = true;
     WidgetsBinding.instance.addObserver(this);
-    // Defer native calls until after the first frame so route pushes / Driver
-    // taps can settle before secure-screen + mask configuration runs.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _applyConfiguration();
-    });
     _eventSubscription = _plugin.onProtectionEvent.listen(_handleEvent);
+    _coordinator.registerScope(this);
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _isActiveInTree = true;
+    _coordinator.notifyScopeChanged(this);
+  }
+
+  @override
+  void deactivate() {
+    _isActiveInTree = false;
+    _coordinator.notifyScopeChanged(this);
+    super.deactivate();
   }
 
   @override
@@ -83,28 +116,55 @@ class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.enableSecureScreen != widget.enableSecureScreen ||
         oldWidget.maskConfig != widget.maskConfig) {
-      _applyConfiguration();
+      _coordinator.notifyScopeChanged(this);
+    }
+    if ((!widget.maskConfig.enabled ||
+            widget.maskConfig.style == ScreenProtectionMaskStyle.none) &&
+        _isLifecycleInactive) {
+      _isLifecycleInactive = false;
     }
   }
 
-  Future<void> _applyConfiguration() async {
-    await _plugin.setSecureScreen(widget.enableSecureScreen);
-    await _plugin.configureAppSwitcherProtection(widget.maskConfig);
-    final recording = await _plugin.isScreenBeingRecorded();
-    if (mounted && recording != _isRecording) {
+  @override
+  void notifyOnstageChanged(bool onstage, {required bool fromDispose}) {
+    _isOnstage = onstage;
+    if (fromDispose || !mounted) {
+      return;
+    }
+    if (onstage) {
+      unawaited(_refreshRecordingState());
+    } else if (_isLifecycleInactive) {
       setState(() {
-        _isRecording = recording;
+        _isLifecycleInactive = false;
       });
     }
   }
 
+  Future<void> _refreshRecordingState() async {
+    final recording = await _plugin.isScreenBeingRecorded();
+    if (!mounted || !_isOnstage) {
+      return;
+    }
+    final isInitialCheck = !_hasInitializedRecordingState;
+    _hasInitializedRecordingState = true;
+    if (recording != _isRecording) {
+      setState(() {
+        _isRecording = recording;
+      });
+      if (!isInitialCheck) {
+        widget.onRecordingStateChanged?.call(recording);
+      }
+    }
+  }
+
   void _handleEvent(ScreenProtectionEvent event) {
-    if (!mounted) return;
+    if (!mounted || !_isOnstage) return;
     switch (event.type) {
       case ScreenProtectionEventType.screenshotTaken:
       case ScreenProtectionEventType.shortcutBlocked:
         widget.onScreenshotTaken?.call(event);
       case ScreenProtectionEventType.recordingStarted:
+        _hasInitializedRecordingState = true;
         if (!_isRecording) {
           setState(() {
             _isRecording = true;
@@ -112,6 +172,7 @@ class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
           widget.onRecordingStateChanged?.call(true);
         }
       case ScreenProtectionEventType.recordingStopped:
+        _hasInitializedRecordingState = true;
         if (_isRecording) {
           setState(() {
             _isRecording = false;
@@ -126,8 +187,14 @@ class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!widget.maskConfig.enabled ||
+    if (!_isOnstage ||
+        !widget.maskConfig.enabled ||
         widget.maskConfig.style == ScreenProtectionMaskStyle.none) {
+      if (_isLifecycleInactive && mounted) {
+        setState(() {
+          _isLifecycleInactive = false;
+        });
+      }
       return;
     }
     final shouldMask =
@@ -143,11 +210,10 @@ class _ScreenProtectionScopeState extends State<ScreenProtectionScope>
 
   @override
   void dispose() {
+    _isActiveInTree = false;
     WidgetsBinding.instance.removeObserver(this);
     _eventSubscription?.cancel();
-    if (widget.enableSecureScreen) {
-      _plugin.setSecureScreen(false);
-    }
+    _coordinator.unregisterScope(this);
     super.dispose();
   }
 
