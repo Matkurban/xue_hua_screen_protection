@@ -6,7 +6,7 @@
 
 - **作者**：Matkurban (`3496354336@qq.com`)
 - **仓库地址**：[https://github.com/Matkurban/xue_hua_screen_protection](https://github.com/Matkurban/xue_hua_screen_protection)
-- **当前版本**：`1.0.6`
+- **当前版本**：`1.1.0`
 
 ## 核心特性
 
@@ -37,7 +37,7 @@
 
 ```yaml
 dependencies:
-  xue_hua_screen_protection: ^1.0.6
+  xue_hua_screen_protection: ^1.1.0
 ```
 
 或者直接通过 Git 仓库依赖：

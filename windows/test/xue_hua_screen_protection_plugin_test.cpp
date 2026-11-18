@@ -1,49 +1,32 @@
-#include <flutter/method_call.h>
-#include <flutter/method_result_functions.h>
-#include <flutter/standard_method_codec.h>
 #include <gtest/gtest.h>
 #include <windows.h>
 
-#include <memory>
-#include <string>
-#include <variant>
-
+#include "messages.g.h"
 #include "xue_hua_screen_protection_plugin.h"
 
 namespace xue_hua_screen_protection {
 namespace test {
 
-namespace {
-
-using flutter::EncodableMap;
-using flutter::EncodableValue;
-using flutter::MethodCall;
-using flutter::MethodResultFunctions;
-
-}  // namespace
-
-TEST(XueHuaScreenProtectionPlugin, SetAndQuerySecureScreen) {
+TEST(XueHuaScreenProtectionPlugin, SetAndQuerySecureScreenViaPigeonHostApi) {
   XueHuaScreenProtectionPlugin plugin;
-  bool set_result = false;
-  EncodableMap args = {{EncodableValue("enabled"), EncodableValue(true)}};
-  plugin.HandleMethodCall(
-      MethodCall("setSecureScreen", std::make_unique<EncodableValue>(args)),
-      std::make_unique<MethodResultFunctions<>>(
-          [&set_result](const EncodableValue *result) {
-            set_result = std::get<bool>(*result);
-          },
-          nullptr, nullptr));
-  EXPECT_TRUE(set_result);
 
-  bool is_enabled = false;
-  plugin.HandleMethodCall(
-      MethodCall("isSecureScreenEnabled", std::make_unique<EncodableValue>()),
-      std::make_unique<MethodResultFunctions<>>(
-          [&is_enabled](const EncodableValue *result) {
-            is_enabled = std::get<bool>(*result);
-          },
-          nullptr, nullptr));
-  EXPECT_TRUE(is_enabled);
+  ErrorOr<bool> set_result = plugin.SetSecureScreen(true);
+  ASSERT_FALSE(set_result.has_error());
+  EXPECT_TRUE(set_result.value());
+
+  ErrorOr<bool> is_enabled = plugin.IsSecureScreenEnabled();
+  ASSERT_FALSE(is_enabled.has_error());
+  EXPECT_TRUE(is_enabled.value());
+
+  ErrorOr<ScreenProtectionStatusMessage> status = plugin.GetProtectionStatus();
+  ASSERT_FALSE(status.has_error());
+  EXPECT_TRUE(status.value().is_secure_screen_enabled());
+  EXPECT_EQ(status.value().platform(), "windows");
+
+  ErrorOr<ScreenProtectionCapabilitiesMessage> caps = plugin.GetCapabilities();
+  ASSERT_FALSE(caps.has_error());
+  EXPECT_EQ(caps.value().platform(), "windows");
+  EXPECT_TRUE(caps.value().supports_hardware_anti_screenshot());
 }
 
 }  // namespace test

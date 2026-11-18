@@ -1,18 +1,13 @@
 #include "xue_hua_screen_protection_plugin.h"
 
 #include <VersionHelpers.h>
-#include <flutter/event_channel.h>
-#include <flutter/event_stream_handler_functions.h>
-#include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
-#include <flutter/standard_method_codec.h>
 #include <windows.h>
 
 #include <chrono>
 #include <memory>
-#include <sstream>
 #include <string>
-#include <vector>
+#include <utility>
 
 #ifndef WDA_NONE
 #define WDA_NONE 0x00000000
@@ -30,10 +25,6 @@ namespace xue_hua_screen_protection {
 
 namespace {
 
-constexpr char kMethodChannelName[] =
-    "com.kurban.xue_hua_screen_protection/methods";
-constexpr char kEventChannelName[] =
-    "com.kurban.xue_hua_screen_protection/events";
 constexpr wchar_t kOverlayClassName[] = L"XueHuaScreenProtectionOverlayClass";
 constexpr ULONGLONG kScreenshotDebounceMs = 1200;
 
@@ -42,7 +33,7 @@ std::wstring Utf8ToWide(const std::string &utf8) {
   int count = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
                                   static_cast<int>(utf8.size()), nullptr, 0);
   if (count <= 0) return std::wstring();
-  std::wstring wide(count, 0);
+  std::wstring wide(static_cast<size_t>(count), L'\0');
   MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
                       &wide[0], count);
   return wide;
@@ -67,46 +58,7 @@ int64_t CurrentEpochMillis() {
 void XueHuaScreenProtectionPlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
   auto plugin = std::make_unique<XueHuaScreenProtectionPlugin>(registrar);
-
-  auto method_channel =
-      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-          registrar->messenger(), kMethodChannelName,
-          &flutter::StandardMethodCodec::GetInstance());
-
-  auto event_channel =
-      std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
-          registrar->messenger(), kEventChannelName,
-          &flutter::StandardMethodCodec::GetInstance());
-
-  XueHuaScreenProtectionPlugin *plugin_ptr = plugin.get();
-
-  method_channel->SetMethodCallHandler(
-      [plugin_ptr](const auto &call, auto result) {
-        plugin_ptr->HandleMethodCall(call, std::move(result));
-      });
-
-  auto stream_handler = std::make_unique<
-      flutter::StreamHandlerFunctions<flutter::EncodableValue>>(
-      [plugin_ptr](
-          const flutter::EncodableValue *arguments,
-          std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> &&events)
-          -> std::unique_ptr<flutter::StreamHandlerError<
-              flutter::EncodableValue>> {
-        plugin_ptr->SetEventSink(std::move(events));
-        return nullptr;
-      },
-      [plugin_ptr](const flutter::EncodableValue *arguments)
-          -> std::unique_ptr<flutter::StreamHandlerError<
-              flutter::EncodableValue>> {
-        plugin_ptr->SetEventSink(nullptr);
-        return nullptr;
-      });
-
-  event_channel->SetStreamHandler(std::move(stream_handler));
-
-  plugin->method_channel_ = std::move(method_channel);
-  plugin->event_channel_ = std::move(event_channel);
-
+  ScreenProtectionHostApi::SetUp(registrar->messenger(), plugin.get());
   registrar->AddPlugin(std::move(plugin));
 }
 
@@ -114,6 +66,8 @@ XueHuaScreenProtectionPlugin::XueHuaScreenProtectionPlugin(
     flutter::PluginRegistrarWindows *registrar)
     : registrar_(registrar) {
   if (registrar_ != nullptr) {
+    flutter_api_ =
+        std::make_unique<ScreenProtectionFlutterApi>(registrar_->messenger());
     window_proc_id_ = registrar_->RegisterTopLevelWindowProcDelegate(
         [this](HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
           return this->HandleWindowProc(hwnd, message, wparam, lparam);
@@ -128,14 +82,12 @@ XueHuaScreenProtectionPlugin::~XueHuaScreenProtectionPlugin() {
     RemoveClipboardFormatListener(tracked_hwnd_);
     clipboard_listener_registered_ = false;
   }
-  if (registrar_ != nullptr && window_proc_id_ != -1) {
-    registrar_->UnregisterTopLevelWindowProcDelegate(window_proc_id_);
+  if (registrar_ != nullptr) {
+    if (window_proc_id_ != -1) {
+      registrar_->UnregisterTopLevelWindowProcDelegate(window_proc_id_);
+    }
+    ScreenProtectionHostApi::SetUp(registrar_->messenger(), nullptr);
   }
-}
-
-void XueHuaScreenProtectionPlugin::SetEventSink(
-    std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> sink) {
-  event_sink_ = std::move(sink);
 }
 
 HWND XueHuaScreenProtectionPlugin::GetMainWindowHandle() const {
@@ -176,7 +128,7 @@ bool XueHuaScreenProtectionPlugin::ApplyDisplayAffinity(bool enabled) {
 }
 
 std::optional<LRESULT> XueHuaScreenProtectionPlugin::HandleWindowProc(
-    HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    HWND hwnd, UINT message, WPARAM wparam, LPARAM /*lparam*/) {
   if (!clipboard_listener_registered_ && IsWindow(hwnd)) {
     if (AddClipboardFormatListener(hwnd)) {
       clipboard_listener_registered_ = true;
@@ -188,7 +140,9 @@ std::optional<LRESULT> XueHuaScreenProtectionPlugin::HandleWindowProc(
     case WM_ACTIVATE: {
       WORD state = LOWORD(wparam);
       if (state == WA_INACTIVE) {
-        if (mask_enabled_ && mask_style_ != "none" && protect_on_window_blur_) {
+        if (mask_enabled_ &&
+            mask_style_ != ScreenProtectionMaskStyleMessage::kNone &&
+            protect_on_window_blur_) {
           SetPrivacyMaskVisible(true, "window_deactivated");
         }
       } else {
@@ -210,7 +164,7 @@ std::optional<LRESULT> XueHuaScreenProtectionPlugin::HandleWindowProc(
         ULONGLONG now = GetTickCount64();
         if (now - last_screenshot_tick_ >= kScreenshotDebounceMs) {
           last_screenshot_tick_ = now;
-          EmitEvent("screenshotTaken",
+          EmitEvent(ScreenProtectionEventTypeMessage::kScreenshotTaken,
                     {{flutter::EncodableValue("source"),
                       flutter::EncodableValue("VK_SNAPSHOT")}});
         }
@@ -223,7 +177,7 @@ std::optional<LRESULT> XueHuaScreenProtectionPlugin::HandleWindowProc(
         ULONGLONG now = GetTickCount64();
         if (now - last_screenshot_tick_ >= kScreenshotDebounceMs) {
           last_screenshot_tick_ = now;
-          EmitEvent("screenshotTaken",
+          EmitEvent(ScreenProtectionEventTypeMessage::kScreenshotTaken,
                     {{flutter::EncodableValue("source"),
                       flutter::EncodableValue("WM_CLIPBOARDUPDATE_BITMAP")}});
         }
@@ -368,7 +322,7 @@ void XueHuaScreenProtectionPlugin::SetPrivacyMaskVisible(
     }
     if (!is_mask_currently_visible_) {
       is_mask_currently_visible_ = true;
-      EmitEvent("maskShown",
+      EmitEvent(ScreenProtectionEventTypeMessage::kMaskShown,
                 {{flutter::EncodableValue("reason"),
                   flutter::EncodableValue(reason)}});
     }
@@ -378,7 +332,7 @@ void XueHuaScreenProtectionPlugin::SetPrivacyMaskVisible(
     }
     if (is_mask_currently_visible_) {
       is_mask_currently_visible_ = false;
-      EmitEvent("maskHidden",
+      EmitEvent(ScreenProtectionEventTypeMessage::kMaskHidden,
                 {{flutter::EncodableValue("reason"),
                   flutter::EncodableValue(reason)}});
     }
@@ -386,151 +340,89 @@ void XueHuaScreenProtectionPlugin::SetPrivacyMaskVisible(
 }
 
 void XueHuaScreenProtectionPlugin::EmitEvent(
-    const std::string &type, const flutter::EncodableMap &metadata) {
-  flutter::EncodableMap payload = {
-      {flutter::EncodableValue("type"), flutter::EncodableValue(type)},
-      {flutter::EncodableValue("timestamp"),
-       flutter::EncodableValue(CurrentEpochMillis())},
-      {flutter::EncodableValue("platform"),
-       flutter::EncodableValue("windows")},
-      {flutter::EncodableValue("isCaptured"), flutter::EncodableValue(false)},
-      {flutter::EncodableValue("metadata"), flutter::EncodableValue(metadata)},
-  };
-
-  flutter::EncodableValue event_val(payload);
-  if (event_sink_ != nullptr) {
-    event_sink_->Success(event_val);
+    ScreenProtectionEventTypeMessage type,
+    const flutter::EncodableMap &metadata) {
+  if (flutter_api_ == nullptr) {
+    return;
   }
-  if (method_channel_ != nullptr) {
-    method_channel_->InvokeMethod(
-        "onProtectionEvent",
-        std::make_unique<flutter::EncodableValue>(event_val));
-  }
+  ScreenProtectionEventMessage event(type, CurrentEpochMillis(), "windows",
+                                     false, metadata);
+  flutter_api_->OnProtectionEvent(
+      event, []() {}, [](const FlutterError & /*error*/) {});
 }
 
-void XueHuaScreenProtectionPlugin::HandleMethodCall(
-    const flutter::MethodCall<flutter::EncodableValue> &method_call,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  const std::string &method = method_call.method_name();
+// -----------------------------------------------------------------------------
+// ScreenProtectionHostApi implementation
+// -----------------------------------------------------------------------------
 
-  if (method == "setSecureScreen") {
-    bool enabled = false;
-    if (const auto *args =
-            std::get_if<flutter::EncodableMap>(method_call.arguments())) {
-      auto it = args->find(flutter::EncodableValue("enabled"));
-      if (it != args->end()) {
-        if (const auto *val = std::get_if<bool>(&it->second)) {
-          enabled = *val;
-        }
-      }
-    }
-    bool ok = ApplyDisplayAffinity(enabled);
-    result->Success(flutter::EncodableValue(ok));
-  } else if (method == "isSecureScreenEnabled") {
-    result->Success(flutter::EncodableValue(is_secure_screen_enabled_));
-  } else if (method == "configureAppSwitcherProtection") {
-    if (const auto *args =
-            std::get_if<flutter::EncodableMap>(method_call.arguments())) {
-      auto get_bool = [&](const char *key, bool fallback) {
-        auto it = args->find(flutter::EncodableValue(key));
-        if (it != args->end()) {
-          if (const auto *v = std::get_if<bool>(&it->second)) return *v;
-        }
-        return fallback;
-      };
-      auto get_string = [&](const char *key, const std::string &fallback) {
-        auto it = args->find(flutter::EncodableValue(key));
-        if (it != args->end()) {
-          if (const auto *v = std::get_if<std::string>(&it->second)) return *v;
-        }
-        return fallback;
-      };
-      auto get_uint32 = [&](const char *key, uint32_t fallback) {
-        auto it = args->find(flutter::EncodableValue(key));
-        if (it != args->end()) {
-          if (const auto *v32 = std::get_if<int32_t>(&it->second)) {
-            return static_cast<uint32_t>(*v32);
-          }
-          if (const auto *v64 = std::get_if<int64_t>(&it->second)) {
-            return static_cast<uint32_t>(*v64);
-          }
-        }
-        return fallback;
-      };
+ErrorOr<bool> XueHuaScreenProtectionPlugin::SetSecureScreen(bool enabled) {
+  return ApplyDisplayAffinity(enabled);
+}
 
-      mask_enabled_ = get_bool("enabled", true);
-      mask_style_ = get_string("style", "blur");
-      mask_background_color_ = get_uint32("backgroundColor", 0xEB0F172A);
-      mask_text_color_ = get_uint32("textColor", 0xFFFFFFFF);
-      mask_title_ = get_string("title", "Privacy Protected");
-      mask_subtitle_ = get_string(
-          "subtitle",
-          "Screen content is hidden to protect sensitive information.");
-      mask_show_lock_icon_ = get_bool("showLockIcon", true);
-      protect_on_window_blur_ = get_bool("protectOnWindowBlur", true);
-    }
+ErrorOr<bool> XueHuaScreenProtectionPlugin::IsSecureScreenEnabled() {
+  return is_secure_screen_enabled_;
+}
 
-    if (!mask_enabled_ || mask_style_ == "none") {
-      SetPrivacyMaskVisible(false, "config_disabled");
-    } else if (is_mask_currently_visible_) {
-      HWND hwnd = GetMainWindowHandle();
-      if (hwnd != nullptr) UpdateOverlayLayout(hwnd);
-    }
-    result->Success(flutter::EncodableValue(true));
-  } else if (method == "configureWebProtection") {
-    result->Success(flutter::EncodableValue(false));
-  } else if (method == "isScreenBeingRecorded") {
-    result->Success(flutter::EncodableValue(false));
-  } else if (method == "getProtectionStatus") {
-    flutter::EncodableMap status = {
-        {flutter::EncodableValue("isSecureScreenEnabled"),
-         flutter::EncodableValue(is_secure_screen_enabled_)},
-        {flutter::EncodableValue("isAppSwitcherMaskEnabled"),
-         flutter::EncodableValue(mask_enabled_ && mask_style_ != "none")},
-        {flutter::EncodableValue("isScreenBeingRecorded"),
-         flutter::EncodableValue(false)},
-        {flutter::EncodableValue("isMaskCurrentlyVisible"),
-         flutter::EncodableValue(is_mask_currently_visible_)},
-        {flutter::EncodableValue("platform"),
-         flutter::EncodableValue("windows")},
-    };
-    result->Success(flutter::EncodableValue(status));
-  } else if (method == "getCapabilities") {
-    std::string os_ver = IsWindows10OrGreater() ? "Windows 10/11+" : "Windows";
-    flutter::EncodableList limitations = {
-        flutter::EncodableValue(
-            "Windows blocks all screen recording and screenshots at the DWM level via SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE), so separate active-recording detection is not exposed by Win32."),
-    };
-    flutter::EncodableMap caps = {
-        {flutter::EncodableValue("platform"),
-         flutter::EncodableValue("windows")},
-        {flutter::EncodableValue("osVersion"),
-         flutter::EncodableValue(os_ver)},
-        {flutter::EncodableValue("supportsHardwareAntiScreenshot"),
-         flutter::EncodableValue(true)},
-        {flutter::EncodableValue("supportsHardwareAntiRecording"),
-         flutter::EncodableValue(true)},
-        {flutter::EncodableValue("supportsScreenshotDetection"),
-         flutter::EncodableValue(true)},
-        {flutter::EncodableValue("supportsRecordingDetection"),
-         flutter::EncodableValue(false)},
-        {flutter::EncodableValue("supportsNativeAppSwitcherMask"),
-         flutter::EncodableValue(true)},
-        {flutter::EncodableValue("supportsNativeBlurEffect"),
-         flutter::EncodableValue(true)},
-        {flutter::EncodableValue("limitations"),
-         flutter::EncodableValue(limitations)},
-    };
-    result->Success(flutter::EncodableValue(caps));
-  } else if (method == "showPrivacyMask") {
-    SetPrivacyMaskVisible(true, "manual");
-    result->Success(flutter::EncodableValue(true));
-  } else if (method == "hidePrivacyMask") {
-    SetPrivacyMaskVisible(false, "manual");
-    result->Success(flutter::EncodableValue(true));
-  } else {
-    result->NotImplemented();
+ErrorOr<bool> XueHuaScreenProtectionPlugin::ConfigureAppSwitcherProtection(
+    const ScreenProtectionMaskConfigMessage &config) {
+  mask_enabled_ = config.enabled();
+  mask_style_ = config.style();
+  mask_blur_sigma_ = config.blur_sigma();
+  mask_background_color_ = static_cast<uint32_t>(config.background_color());
+  mask_text_color_ = static_cast<uint32_t>(config.text_color());
+  mask_title_ =
+      config.title().empty() ? "Privacy Protected" : config.title();
+  mask_subtitle_ = config.subtitle();
+  mask_show_lock_icon_ = config.show_lock_icon();
+  protect_on_window_blur_ = config.protect_on_window_blur();
+
+  if (!mask_enabled_ ||
+      mask_style_ == ScreenProtectionMaskStyleMessage::kNone) {
+    SetPrivacyMaskVisible(false, "config_disabled");
+  } else if (is_mask_currently_visible_) {
+    HWND hwnd = GetMainWindowHandle();
+    if (hwnd != nullptr) UpdateOverlayLayout(hwnd);
   }
+  return true;
+}
+
+ErrorOr<bool> XueHuaScreenProtectionPlugin::ConfigureWebProtection(
+    const WebProtectionConfigMessage & /*config*/) {
+  return false;
+}
+
+ErrorOr<bool> XueHuaScreenProtectionPlugin::IsScreenBeingRecorded() {
+  return false;
+}
+
+ErrorOr<ScreenProtectionStatusMessage>
+XueHuaScreenProtectionPlugin::GetProtectionStatus() {
+  return ScreenProtectionStatusMessage(
+      is_secure_screen_enabled_,
+      mask_enabled_ && mask_style_ != ScreenProtectionMaskStyleMessage::kNone,
+      false, is_mask_currently_visible_, "windows");
+}
+
+ErrorOr<ScreenProtectionCapabilitiesMessage>
+XueHuaScreenProtectionPlugin::GetCapabilities() {
+  std::string os_ver = IsWindows10OrGreater() ? "Windows 10/11+" : "Windows";
+  flutter::EncodableList limitations = {
+      flutter::EncodableValue(
+          "Windows blocks all screen recording and screenshots at the DWM level via SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE), so separate active-recording detection is not exposed by Win32."),
+  };
+  return ScreenProtectionCapabilitiesMessage("windows", os_ver, true, true,
+                                             true, false, true, true,
+                                             limitations);
+}
+
+ErrorOr<bool> XueHuaScreenProtectionPlugin::ShowPrivacyMask() {
+  SetPrivacyMaskVisible(true, "manual");
+  return true;
+}
+
+ErrorOr<bool> XueHuaScreenProtectionPlugin::HidePrivacyMask() {
+  SetPrivacyMaskVisible(false, "manual");
+  return true;
 }
 
 }  // namespace xue_hua_screen_protection

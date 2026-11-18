@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'xue_hua_screen_protection'
-  s.version          = '1.0.0'
+  s.version          = '1.1.0'
   s.summary          = 'Cross-platform Flutter screen privacy protection, anti-screenshot, anti-recording, and blur mask plugin.'
   s.description      = <<-DESC
 A comprehensive cross-platform Flutter plugin for screen privacy protection, anti-screenshot, anti-recording, capture detection, app-switcher blur masks, and security watermarks.

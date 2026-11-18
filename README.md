@@ -6,7 +6,7 @@ A comprehensive, production-grade cross-platform Flutter plugin for **screen pri
 
 - **Author**: Matkurban (`3496354336@qq.com`)
 - **Repository**: [https://github.com/Matkurban/xue_hua_screen_protection](https://github.com/Matkurban/xue_hua_screen_protection)
-- **Version**: `1.0.6`
+- **Version**: `1.1.0`
 
 ## Features
 
@@ -37,7 +37,7 @@ Add `xue_hua_screen_protection` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_screen_protection: ^1.0.6
+  xue_hua_screen_protection: ^1.1.0
 ```
 
 Or reference the Git repository directly:

@@ -29,15 +29,10 @@ import android.widget.TextView
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.MethodChannel.Result
 import java.util.function.Consumer
 
 /**
- * Android implementation of `xue_hua_screen_protection`.
+ * Android implementation of `xue_hua_screen_protection` powered by Pigeon.
  *
  * Capabilities:
  * - Hardware screenshot & recording block via `WindowManager.LayoutParams.FLAG_SECURE`.
@@ -50,22 +45,17 @@ import java.util.function.Consumer
  */
 class XueHuaScreenProtectionPlugin :
     FlutterPlugin,
-    MethodCallHandler,
-    EventChannel.StreamHandler,
+    ScreenProtectionHostApi,
     ActivityAware,
     Application.ActivityLifecycleCallbacks,
     DisplayManager.DisplayListener {
 
     companion object {
-        private const val METHOD_CHANNEL_NAME = "com.kurban.xue_hua_screen_protection/methods"
-        private const val EVENT_CHANNEL_NAME = "com.kurban.xue_hua_screen_protection/events"
         private const val MASK_VIEW_TAG = "xue_hua_screen_protection_mask_overlay"
         private const val SCREENSHOT_DEBOUNCE_MS = 1200L
     }
 
-    private lateinit var methodChannel: MethodChannel
-    private lateinit var eventChannel: EventChannel
-    private var eventSink: EventChannel.EventSink? = null
+    private var flutterApi: ScreenProtectionFlutterApi? = null
     private var applicationContext: Context? = null
     private var activity: Activity? = null
     private val mainHandler: Handler by lazy(LazyThreadSafetyMode.NONE) {
@@ -73,13 +63,13 @@ class XueHuaScreenProtectionPlugin :
     }
 
     // Protection state
-    private var isSecureScreenEnabled: Boolean = false
-    private var isScreenBeingRecorded: Boolean = false
+    private var secureScreenEnabledState: Boolean = false
+    private var screenBeingRecordedState: Boolean = false
     private var isMaskCurrentlyVisible: Boolean = false
 
     // Mask configuration
     private var maskEnabled: Boolean = false
-    private var maskStyle: String = "blur"
+    private var maskStyle: ScreenProtectionMaskStyleMessage = ScreenProtectionMaskStyleMessage.BLUR
     private var maskBlurSigma: Float = 20.0f
     private var maskBackgroundColor: Int = 0xEB0F172A.toInt()
     private var maskTextColor: Int = Color.WHITE
@@ -98,11 +88,8 @@ class XueHuaScreenProtectionPlugin :
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
-        methodChannel = MethodChannel(flutterPluginBinding.binaryMessenger, METHOD_CHANNEL_NAME)
-        methodChannel.setMethodCallHandler(this)
-
-        eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, EVENT_CHANNEL_NAME)
-        eventChannel.setStreamHandler(this)
+        ScreenProtectionHostApi.setUp(flutterPluginBinding.binaryMessenger, this)
+        flutterApi = ScreenProtectionFlutterApi(flutterPluginBinding.binaryMessenger)
 
         displayManager =
             applicationContext?.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
@@ -114,119 +101,100 @@ class XueHuaScreenProtectionPlugin :
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         displayManager?.unregisterDisplayListener(this)
         unregisterMediaStoreScreenshotObserver()
-        methodChannel.setMethodCallHandler(null)
-        eventChannel.setStreamHandler(null)
+        ScreenProtectionHostApi.setUp(binding.binaryMessenger, null)
+        flutterApi = null
         applicationContext = null
     }
 
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-    }
-
-    override fun onCancel(arguments: Any?) {
-        eventSink = null
-    }
-
     // -------------------------------------------------------------------------
-    // MethodChannel Dispatch
+    // ScreenProtectionHostApi (Pigeon)
     // -------------------------------------------------------------------------
 
-    override fun onMethodCall(call: MethodCall, result: Result) {
-        when (call.method) {
-            "setSecureScreen" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                val applied = applySecureScreenFlag(enabled)
-                result.success(applied)
-            }
+    override fun setSecureScreen(enabled: Boolean): Boolean {
+        return applySecureScreenFlag(enabled)
+    }
 
-            "isSecureScreenEnabled" -> {
-                result.success(isSecureScreenEnabled)
-            }
+    override fun isSecureScreenEnabled(): Boolean {
+        return secureScreenEnabledState
+    }
 
-            "configureAppSwitcherProtection" -> {
-                maskEnabled = call.argument<Boolean>("enabled") ?: true
-                maskStyle = call.argument<String>("style") ?: "blur"
-                maskBlurSigma = (call.argument<Number>("blurSigma")?.toFloat() ?: 20.0f)
-                    .coerceIn(0.0f, 50.0f)
-                maskBackgroundColor = (call.argument<Number>("backgroundColor")?.toInt())
-                    ?: 0xEB0F172A.toInt()
-                maskTextColor = (call.argument<Number>("textColor")?.toInt()) ?: Color.WHITE
-                maskTitle = call.argument<String>("title") ?: "Privacy Protected"
-                maskSubtitle = call.argument<String>("subtitle") ?: ""
-                maskShowLockIcon = call.argument<Boolean>("showLockIcon") ?: true
-                protectOnWindowBlur = call.argument<Boolean>("protectOnWindowBlur") ?: true
+    override fun configureAppSwitcherProtection(
+        config: ScreenProtectionMaskConfigMessage
+    ): Boolean {
+        maskEnabled = config.enabled
+        maskStyle = config.style
+        maskBlurSigma = config.blurSigma.toFloat().coerceIn(0.0f, 50.0f)
+        maskBackgroundColor = config.backgroundColor.toInt()
+        maskTextColor = config.textColor.toInt()
+        maskTitle = config.title.ifEmpty { "Privacy Protected" }
+        maskSubtitle = config.subtitle
+        maskShowLockIcon = config.showLockIcon
+        protectOnWindowBlur = config.protectOnWindowBlur
 
-                if (!maskEnabled || maskStyle == "none") {
-                    setPrivacyMaskVisible(false, reason = "config_disabled")
-                } else if (isMaskCurrentlyVisible) {
-                    refreshPrivacyMaskView()
-                }
-                result.success(true)
-            }
-
-            "configureWebProtection" -> {
-                // Web-only configuration; safely returns false on Android.
-                result.success(false)
-            }
-
-            "isScreenBeingRecorded" -> {
-                checkVirtualDisplaysForRecording(emitIfChanged = false)
-                result.success(isScreenBeingRecorded)
-            }
-
-            "getProtectionStatus" -> {
-                checkVirtualDisplaysForRecording(emitIfChanged = false)
-                result.success(
-                    mapOf(
-                        "isSecureScreenEnabled" to isSecureScreenEnabled,
-                        "isAppSwitcherMaskEnabled" to (maskEnabled && maskStyle != "none"),
-                        "isScreenBeingRecorded" to isScreenBeingRecorded,
-                        "isMaskCurrentlyVisible" to isMaskCurrentlyVisible,
-                        "platform" to "android"
-                    )
-                )
-            }
-
-            "getCapabilities" -> {
-                val sdkInt = Build.VERSION.SDK_INT
-                val limitations = mutableListOf<String>()
-                if (sdkInt < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    limitations.add(
-                        "Android < 14 uses MediaStore ContentObserver for screenshot detection instead of Activity.ScreenCaptureCallback."
-                    )
-                }
-                if (sdkInt < Build.VERSION_CODES.S) {
-                    limitations.add(
-                        "Android < 12 does not support RenderEffect window blur; privacy mask uses styled translucent/solid overlay."
-                    )
-                }
-                result.success(
-                    mapOf(
-                        "platform" to "android",
-                        "osVersion" to "Android ${Build.VERSION.RELEASE} (API $sdkInt)",
-                        "supportsHardwareAntiScreenshot" to true,
-                        "supportsHardwareAntiRecording" to true,
-                        "supportsScreenshotDetection" to true,
-                        "supportsRecordingDetection" to true,
-                        "supportsNativeAppSwitcherMask" to true,
-                        "supportsNativeBlurEffect" to (sdkInt >= Build.VERSION_CODES.S),
-                        "limitations" to limitations
-                    )
-                )
-            }
-
-            "showPrivacyMask" -> {
-                setPrivacyMaskVisible(true, reason = "manual")
-                result.success(true)
-            }
-
-            "hidePrivacyMask" -> {
-                setPrivacyMaskVisible(false, reason = "manual")
-                result.success(true)
-            }
-
-            else -> result.notImplemented()
+        if (!maskEnabled || maskStyle == ScreenProtectionMaskStyleMessage.NONE) {
+            setPrivacyMaskVisible(false, reason = "config_disabled")
+        } else if (isMaskCurrentlyVisible) {
+            refreshPrivacyMaskView()
         }
+        return true
+    }
+
+    override fun configureWebProtection(config: WebProtectionConfigMessage): Boolean {
+        // Web-only configuration; safely returns false on Android.
+        return false
+    }
+
+    override fun isScreenBeingRecorded(): Boolean {
+        checkVirtualDisplaysForRecording(emitIfChanged = false)
+        return screenBeingRecordedState
+    }
+
+    override fun getProtectionStatus(): ScreenProtectionStatusMessage {
+        checkVirtualDisplaysForRecording(emitIfChanged = false)
+        return ScreenProtectionStatusMessage(
+            isSecureScreenEnabled = secureScreenEnabledState,
+            isAppSwitcherMaskEnabled =
+                maskEnabled && maskStyle != ScreenProtectionMaskStyleMessage.NONE,
+            isScreenBeingRecorded = screenBeingRecordedState,
+            isMaskCurrentlyVisible = isMaskCurrentlyVisible,
+            platform = "android"
+        )
+    }
+
+    override fun getCapabilities(): ScreenProtectionCapabilitiesMessage {
+        val sdkInt = Build.VERSION.SDK_INT
+        val limitations = mutableListOf<String>()
+        if (sdkInt < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            limitations.add(
+                "Android < 14 uses MediaStore ContentObserver for screenshot detection instead of Activity.ScreenCaptureCallback."
+            )
+        }
+        if (sdkInt < Build.VERSION_CODES.S) {
+            limitations.add(
+                "Android < 12 does not support RenderEffect window blur; privacy mask uses styled translucent/solid overlay."
+            )
+        }
+        return ScreenProtectionCapabilitiesMessage(
+            platform = "android",
+            osVersion = "Android ${Build.VERSION.RELEASE} (API $sdkInt)",
+            supportsHardwareAntiScreenshot = true,
+            supportsHardwareAntiRecording = true,
+            supportsScreenshotDetection = true,
+            supportsRecordingDetection = true,
+            supportsNativeAppSwitcherMask = true,
+            supportsNativeBlurEffect = sdkInt >= Build.VERSION_CODES.S,
+            limitations = limitations
+        )
+    }
+
+    override fun showPrivacyMask(): Boolean {
+        setPrivacyMaskVisible(true, reason = "manual")
+        return true
+    }
+
+    override fun hidePrivacyMask(): Boolean {
+        setPrivacyMaskVisible(false, reason = "manual")
+        return true
     }
 
     // -------------------------------------------------------------------------
@@ -252,7 +220,7 @@ class XueHuaScreenProtectionPlugin :
     private fun attachActivity(newActivity: Activity) {
         activity = newActivity
         newActivity.application.registerActivityLifecycleCallbacks(this)
-        if (isSecureScreenEnabled) {
+        if (secureScreenEnabledState) {
             applySecureScreenFlag(true)
         }
         registerWindowFocusListener(newActivity)
@@ -271,10 +239,10 @@ class XueHuaScreenProtectionPlugin :
     }
 
     private fun applySecureScreenFlag(enabled: Boolean): Boolean {
-        isSecureScreenEnabled = enabled
+        secureScreenEnabledState = enabled
         val currentActivity = activity ?: return true
         currentActivity.runOnUiThread {
-            if (isSecureScreenEnabled) {
+            if (secureScreenEnabledState) {
                 currentActivity.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             } else {
                 currentActivity.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -391,7 +359,7 @@ class XueHuaScreenProtectionPlugin :
         }
         lastScreenshotTimestamp = now
         emitEvent(
-            type = "screenshotTaken",
+            type = ScreenProtectionEventTypeMessage.SCREENSHOT_TAKEN,
             metadata = mapOf("source" to source)
         )
     }
@@ -419,11 +387,11 @@ class XueHuaScreenProtectionPlugin :
             // display as "recording" false-positives on emulators / multi-display OEMs.
             val isVirtualOrMirror =
                 name.contains("record") ||
-                        name.contains("screencast") ||
-                        name.contains("scrcpy") ||
-                        name.contains("virtual") ||
-                        name.contains("capture") ||
-                        name.contains("mirror")
+                    name.contains("screencast") ||
+                    name.contains("scrcpy") ||
+                    name.contains("virtual") ||
+                    name.contains("capture") ||
+                    name.contains("mirror")
             if (isVirtualOrMirror) {
                 suspiciousDisplayFound = true
                 break
@@ -432,15 +400,19 @@ class XueHuaScreenProtectionPlugin :
         if (emitIfChanged) {
             updateRecordingState(suspiciousDisplayFound, source = "DisplayManager")
         } else if (suspiciousDisplayFound) {
-            isScreenBeingRecorded = true
+            screenBeingRecordedState = true
         }
     }
 
     private fun updateRecordingState(recording: Boolean, source: String) {
-        if (isScreenBeingRecorded == recording) return
-        isScreenBeingRecorded = recording
+        if (screenBeingRecordedState == recording) return
+        screenBeingRecordedState = recording
         emitEvent(
-            type = if (recording) "recordingStarted" else "recordingStopped",
+            type = if (recording) {
+                ScreenProtectionEventTypeMessage.RECORDING_STARTED
+            } else {
+                ScreenProtectionEventTypeMessage.RECORDING_STOPPED
+            },
             metadata = mapOf("source" to source)
         )
     }
@@ -453,7 +425,9 @@ class XueHuaScreenProtectionPlugin :
         val decorView = targetActivity.window?.decorView ?: return
         unregisterWindowFocusListener(targetActivity)
         val listener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-            if (!maskEnabled || maskStyle == "none") return@OnWindowFocusChangeListener
+            if (!maskEnabled || maskStyle == ScreenProtectionMaskStyleMessage.NONE) {
+                return@OnWindowFocusChangeListener
+            }
             if (!hasFocus && protectOnWindowBlur) {
                 setPrivacyMaskVisible(true, reason = "window_focus_lost")
             } else if (hasFocus) {
@@ -476,7 +450,10 @@ class XueHuaScreenProtectionPlugin :
     }
 
     override fun onActivityPaused(pausedActivity: Activity) {
-        if (pausedActivity === activity && maskEnabled && maskStyle != "none") {
+        if (pausedActivity === activity &&
+            maskEnabled &&
+            maskStyle != ScreenProtectionMaskStyleMessage.NONE
+        ) {
             setPrivacyMaskVisible(true, reason = "activity_paused")
         }
     }
@@ -501,7 +478,7 @@ class XueHuaScreenProtectionPlugin :
 
             if (visible) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                    maskStyle == "blur" &&
+                    maskStyle == ScreenProtectionMaskStyleMessage.BLUR &&
                     maskBlurSigma > 0f
                 ) {
                     contentView?.setRenderEffect(
@@ -529,7 +506,10 @@ class XueHuaScreenProtectionPlugin :
                 overlay.bringToFront()
                 if (!isMaskCurrentlyVisible) {
                     isMaskCurrentlyVisible = true
-                    emitEvent("maskShown", mapOf("reason" to reason))
+                    emitEvent(
+                        ScreenProtectionEventTypeMessage.MASK_SHOWN,
+                        mapOf("reason" to reason)
+                    )
                 }
             } else {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -543,7 +523,10 @@ class XueHuaScreenProtectionPlugin :
                 }
                 if (isMaskCurrentlyVisible) {
                     isMaskCurrentlyVisible = false
-                    emitEvent("maskHidden", mapOf("reason" to reason))
+                    emitEvent(
+                        ScreenProtectionEventTypeMessage.MASK_HIDDEN,
+                        mapOf("reason" to reason)
+                    )
                 }
             }
         }
@@ -570,7 +553,9 @@ class XueHuaScreenProtectionPlugin :
             isClickable = true
             isFocusable = true
             val alphaAdjustedBg =
-                if (maskStyle == "blur" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (maskStyle == ScreenProtectionMaskStyleMessage.BLUR &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ) {
                     Color.argb(
                         195,
                         Color.red(maskBackgroundColor),
@@ -661,23 +646,22 @@ class XueHuaScreenProtectionPlugin :
     }
 
     // -------------------------------------------------------------------------
-    // Event Dispatch
+    // Event Dispatch (Pigeon FlutterApi)
     // -------------------------------------------------------------------------
 
-    private fun emitEvent(type: String, metadata: Map<String, Any?> = emptyMap()) {
-        val payload = mapOf(
-            "type" to type,
-            "timestamp" to System.currentTimeMillis(),
-            "platform" to "android",
-            "isCaptured" to isScreenBeingRecorded,
-            "metadata" to metadata
+    private fun emitEvent(
+        type: ScreenProtectionEventTypeMessage,
+        metadata: Map<String, Any?> = emptyMap()
+    ) {
+        val message = ScreenProtectionEventMessage(
+            type = type,
+            timestamp = System.currentTimeMillis(),
+            platform = "android",
+            isCaptured = screenBeingRecordedState,
+            metadata = metadata
         )
         mainHandler.post {
-            eventSink?.success(payload)
-            try {
-                methodChannel.invokeMethod("onProtectionEvent", payload)
-            } catch (_: Throwable) {
-            }
+            flutterApi?.onProtectionEvent(message) { }
         }
     }
 }

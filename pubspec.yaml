@@ -1,6 +1,6 @@
 name: xue_hua_screen_protection
 description: "Flutter plugin for screen privacy: anti-screenshot, anti-recording, capture detection, app-switcher blur, and security watermarks."
-version: 1.0.6
+version: 1.1.0
 homepage: https://github.com/Matkurban/xue_hua_screen_protection
 repository: https://github.com/Matkurban/xue_hua_screen_protection
 issue_tracker: https://github.com/Matkurban/xue_hua_screen_protection/issues
@@ -23,13 +23,13 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
   web: ^1.1.2
-  material_ui: ^1.10.0
-  plugin_platform_interface: ^2.1.8
+  material_ui: ^1.11.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  pigeon: ^30.0.3
 
 flutter:
   plugin:

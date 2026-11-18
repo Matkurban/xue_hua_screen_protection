@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 
+#include "messages.g.h"
 #include "xue_hua_screen_protection_plugin_private.h"
 
 #define XUE_HUA_SCREEN_PROTECTION_PLUGIN(obj)                                     \
@@ -16,15 +17,13 @@
 struct _XueHuaScreenProtectionPlugin {
   GObject parent_instance;
   FlPluginRegistrar* registrar;
-  FlMethodChannel* method_channel;
-  FlEventChannel* event_channel;
-  gboolean event_channel_listening;
+  XueHuaScreenProtectionScreenProtectionFlutterApi* flutter_api;
 
   gboolean is_secure_screen_enabled;
   gboolean is_mask_currently_visible;
   gboolean mask_enabled;
   gboolean mask_enabled_by_secure;
-  gchar* mask_style;
+  XueHuaScreenProtectionScreenProtectionMaskStyleMessage mask_style;
   gdouble mask_blur_sigma;
   guint32 mask_background_color;
   guint32 mask_text_color;
@@ -48,7 +47,6 @@ G_DEFINE_TYPE(XueHuaScreenProtectionPlugin,
               xue_hua_screen_protection_plugin,
               g_object_get_type())
 
-
 static void ensure_window_signals_connected(XueHuaScreenProtectionPlugin* self);
 static void ensure_mask_overlay_created(XueHuaScreenProtectionPlugin* self);
 static void sync_mask_overlay_geometry(XueHuaScreenProtectionPlugin* self);
@@ -57,41 +55,36 @@ static void set_mask_visible(XueHuaScreenProtectionPlugin* self,
                              gboolean visible,
                              const gchar* reason);
 
-
 static gint64 current_epoch_millis() {
   return g_get_real_time() / 1000;
 }
 
-static void emit_protection_event(XueHuaScreenProtectionPlugin* self,
-                                  const gchar* type,
-                                  const gchar* reason) {
-  g_autoptr(FlValue) payload = fl_value_new_map();
-  fl_value_set_string_take(payload, "type", fl_value_new_string(type));
-  fl_value_set_string_take(payload, "timestamp",
-                           fl_value_new_int(current_epoch_millis()));
-  fl_value_set_string_take(payload, "platform", fl_value_new_string("linux"));
-  fl_value_set_string_take(payload, "isCaptured", fl_value_new_bool(FALSE));
+static void emit_protection_event(
+    XueHuaScreenProtectionPlugin* self,
+    XueHuaScreenProtectionScreenProtectionEventTypeMessage type,
+    const gchar* reason) {
+  if (self->flutter_api == nullptr) {
+    return;
+  }
 
   g_autoptr(FlValue) metadata = fl_value_new_map();
   if (reason != nullptr) {
     fl_value_set_string_take(metadata, "reason", fl_value_new_string(reason));
   }
-  fl_value_set_string_take(payload, "metadata", g_steal_pointer(&metadata));
 
-  if (self->event_channel != nullptr && self->event_channel_listening) {
-    fl_event_channel_send(self->event_channel, payload, nullptr, nullptr);
-  }
-  if (self->method_channel != nullptr) {
-    fl_method_channel_invoke_method(self->method_channel, "onProtectionEvent",
-                                    payload, nullptr, nullptr, nullptr);
-  }
+  g_autoptr(XueHuaScreenProtectionScreenProtectionEventMessage) event =
+      xue_hua_screen_protection_screen_protection_event_message_new(
+          type, current_epoch_millis(), "linux", FALSE, metadata);
+
+  xue_hua_screen_protection_screen_protection_flutter_api_on_protection_event(
+      self->flutter_api, event, nullptr, nullptr, nullptr);
 }
 
 static void argb_to_rgba_string(guint32 argb, gchar* out, gsize out_len) {
-  const guint8 a = (guint8)((argb >> 24) & 0xFF);
-  const guint8 r = (guint8)((argb >> 16) & 0xFF);
-  const guint8 g = (guint8)((argb >> 8) & 0xFF);
-  const guint8 b = (guint8)(argb & 0xFF);
+  const guint8 a = static_cast<guint8>((argb >> 24) & 0xFF);
+  const guint8 r = static_cast<guint8>((argb >> 16) & 0xFF);
+  const guint8 g = static_cast<guint8>((argb >> 8) & 0xFF);
+  const guint8 b = static_cast<guint8>(argb & 0xFF);
   g_snprintf(out, out_len, "rgba(%u,%u,%u,%.3f)", r, g, b, a / 255.0);
 }
 
@@ -167,8 +160,8 @@ static void sync_mask_overlay_geometry(XueHuaScreenProtectionPlugin* self) {
   gtk_window_resize(GTK_WINDOW(self->mask_overlay), width, height);
 }
 
-static gboolean on_tracked_configure(GtkWidget* widget,
-                                     GdkEventConfigure* event,
+static gboolean on_tracked_configure(GtkWidget* /*widget*/,
+                                     GdkEventConfigure* /*event*/,
                                      gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
@@ -178,9 +171,8 @@ static gboolean on_tracked_configure(GtkWidget* widget,
   return FALSE;
 }
 
-
-static gboolean on_overlay_button_press(GtkWidget* widget,
-                                        GdkEventButton* event,
+static gboolean on_overlay_button_press(GtkWidget* /*widget*/,
+                                        GdkEventButton* /*event*/,
                                         gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
@@ -218,8 +210,9 @@ static void ensure_mask_overlay_created(XueHuaScreenProtectionPlugin* self) {
   gtk_widget_set_margin_end(center, 24);
 
   self->mask_title_label = gtk_label_new("Privacy Protected");
-  gtk_style_context_add_class(gtk_widget_get_style_context(self->mask_title_label),
-                              "xue-hua-privacy-mask-title");
+  gtk_style_context_add_class(
+      gtk_widget_get_style_context(self->mask_title_label),
+      "xue-hua-privacy-mask-title");
   gtk_label_set_justify(GTK_LABEL(self->mask_title_label), GTK_JUSTIFY_CENTER);
   gtk_label_set_line_wrap(GTK_LABEL(self->mask_title_label), TRUE);
 
@@ -227,7 +220,8 @@ static void ensure_mask_overlay_created(XueHuaScreenProtectionPlugin* self) {
   gtk_style_context_add_class(
       gtk_widget_get_style_context(self->mask_subtitle_label),
       "xue-hua-privacy-mask-subtitle");
-  gtk_label_set_justify(GTK_LABEL(self->mask_subtitle_label), GTK_JUSTIFY_CENTER);
+  gtk_label_set_justify(GTK_LABEL(self->mask_subtitle_label),
+                        GTK_JUSTIFY_CENTER);
   gtk_label_set_line_wrap(GTK_LABEL(self->mask_subtitle_label), TRUE);
 
   gtk_box_pack_start(GTK_BOX(center), self->mask_title_label, FALSE, FALSE, 0);
@@ -289,26 +283,35 @@ static void set_mask_visible(XueHuaScreenProtectionPlugin* self,
     }
   }
 
-  emit_protection_event(self, visible ? "maskShown" : "maskHidden", reason);
+  emit_protection_event(
+      self,
+      visible
+          ? XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_EVENT_TYPE_MESSAGE_MASK_SHOWN
+          : XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_EVENT_TYPE_MESSAGE_MASK_HIDDEN,
+      reason);
 }
 
 static gboolean delayed_focus_out_mask(gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
   self->focus_out_timeout_id = 0;
-  if (self->mask_enabled && g_strcmp0(self->mask_style, "none") != 0 &&
+  if (self->mask_enabled &&
+      self->mask_style !=
+          XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE &&
       self->protect_on_window_blur) {
     set_mask_visible(self, TRUE, "gtk_focus_out");
   }
   return G_SOURCE_REMOVE;
 }
 
-static gboolean on_window_focus_out(GtkWidget* widget,
-                                    GdkEventFocus* event,
+static gboolean on_window_focus_out(GtkWidget* /*widget*/,
+                                    GdkEventFocus* /*event*/,
                                     gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
-  if (self->mask_enabled && g_strcmp0(self->mask_style, "none") != 0 &&
+  if (self->mask_enabled &&
+      self->mask_style !=
+          XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE &&
       self->protect_on_window_blur) {
     // Debounce: brief focus flicker during route pushes / dialogs should not
     // permanently cover the Flutter view (breaks Flutter Driver taps).
@@ -320,8 +323,8 @@ static gboolean on_window_focus_out(GtkWidget* widget,
   return FALSE;
 }
 
-static gboolean on_window_focus_in(GtkWidget* widget,
-                                   GdkEventFocus* event,
+static gboolean on_window_focus_in(GtkWidget* /*widget*/,
+                                   GdkEventFocus* /*event*/,
                                    gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
@@ -352,7 +355,8 @@ static void ensure_window_signals_connected(XueHuaScreenProtectionPlugin* self) 
       toplevel, "focus-in-event", G_CALLBACK(on_window_focus_in), self);
 }
 
-FlMethodResponse* get_linux_capabilities_response() {
+XueHuaScreenProtectionScreenProtectionCapabilitiesMessage*
+get_linux_capabilities_message() {
   struct utsname uname_data = {};
   uname(&uname_data);
   g_autofree gchar* os_ver =
@@ -368,190 +372,201 @@ FlMethodResponse* get_linux_capabilities_response() {
       fl_value_new_string(
           "Focus-out privacy masking and ScreenProtectionWatermark are supported on Linux. Blur style uses a translucent overlay (true backdrop blur is compositor-dependent)."));
 
-  g_autoptr(FlValue) map = fl_value_new_map();
-  fl_value_set_string_take(map, "platform", fl_value_new_string("linux"));
-  fl_value_set_string_take(map, "osVersion", fl_value_new_string(os_ver));
-  fl_value_set_string_take(map, "supportsHardwareAntiScreenshot",
-                           fl_value_new_bool(FALSE));
-  fl_value_set_string_take(map, "supportsHardwareAntiRecording",
-                           fl_value_new_bool(FALSE));
-  fl_value_set_string_take(map, "supportsScreenshotDetection",
-                           fl_value_new_bool(FALSE));
-  fl_value_set_string_take(map, "supportsRecordingDetection",
-                           fl_value_new_bool(FALSE));
-  fl_value_set_string_take(map, "supportsNativeAppSwitcherMask",
-                           fl_value_new_bool(TRUE));
-  // True backdrop blur of window contents is not generally available via GTK3
-  // alone; report translucent overlay support honestly.
-  fl_value_set_string_take(map, "supportsNativeBlurEffect",
-                           fl_value_new_bool(FALSE));
-  fl_value_set_string_take(map, "limitations", g_steal_pointer(&limitations));
-
-  return FL_METHOD_RESPONSE(fl_method_success_response_new(map));
+  return xue_hua_screen_protection_screen_protection_capabilities_message_new(
+      "linux", os_ver, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, limitations);
 }
 
-static void xue_hua_screen_protection_plugin_handle_method_call(
-    XueHuaScreenProtectionPlugin* self,
-    FlMethodCall* method_call) {
+// -----------------------------------------------------------------------------
+// Pigeon ScreenProtectionHostApi VTable Handlers
+// -----------------------------------------------------------------------------
+
+static XueHuaScreenProtectionScreenProtectionHostApiSetSecureScreenResponse*
+handle_set_secure_screen(gboolean enabled, gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
   ensure_window_signals_connected(self);
 
-  g_autoptr(FlMethodResponse) response = nullptr;
-  const gchar* method = fl_method_call_get_name(method_call);
-  FlValue* args = fl_method_call_get_args(method_call);
-
-  if (strcmp(method, "setSecureScreen") == 0) {
-    gboolean enabled = FALSE;
-    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
-      FlValue* val = fl_value_lookup_string(args, "enabled");
-      if (val != nullptr && fl_value_get_type(val) == FL_VALUE_TYPE_BOOL) {
-        enabled = fl_value_get_bool(val);
-      }
+  self->is_secure_screen_enabled = enabled;
+  // Linux has no FLAG_SECURE equivalent; enabling secure screen activates
+  // focus-out privacy masking as the documented fallback defense.
+  if (enabled) {
+    if (!self->mask_enabled ||
+        self->mask_style ==
+            XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE) {
+      self->mask_enabled_by_secure = TRUE;
     }
-    self->is_secure_screen_enabled = enabled;
-    // Linux has no FLAG_SECURE equivalent; enabling secure screen activates
-    // focus-out privacy masking as the documented fallback defense.
-    if (enabled) {
-      if (!self->mask_enabled || g_strcmp0(self->mask_style, "none") == 0) {
-        self->mask_enabled_by_secure = TRUE;
-      }
-      self->mask_enabled = TRUE;
-      self->protect_on_window_blur = TRUE;
-      if (g_strcmp0(self->mask_style, "none") == 0) {
-        g_free(self->mask_style);
-        self->mask_style = g_strdup("blur");
-      }
-    } else if (self->mask_enabled_by_secure) {
-      // Undo only the auto-armed fallback; keep explicit user mask config.
-      self->mask_enabled = FALSE;
-      self->mask_enabled_by_secure = FALSE;
-      if (self->focus_out_timeout_id != 0) {
-        g_source_remove(self->focus_out_timeout_id);
-        self->focus_out_timeout_id = 0;
-      }
-      set_mask_visible(self, FALSE, "secure_disabled");
+    self->mask_enabled = TRUE;
+    self->protect_on_window_blur = TRUE;
+    if (self->mask_style ==
+        XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE) {
+      self->mask_style =
+          XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_BLUR;
     }
-    g_autoptr(FlValue) res = fl_value_new_bool(TRUE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "isSecureScreenEnabled") == 0) {
-    g_autoptr(FlValue) res = fl_value_new_bool(self->is_secure_screen_enabled);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "configureAppSwitcherProtection") == 0) {
-    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
-      FlValue* en = fl_value_lookup_string(args, "enabled");
-      if (en != nullptr && fl_value_get_type(en) == FL_VALUE_TYPE_BOOL) {
-        self->mask_enabled = fl_value_get_bool(en);
-        self->mask_enabled_by_secure = FALSE;
-      }
-      FlValue* st = fl_value_lookup_string(args, "style");
-      if (st != nullptr && fl_value_get_type(st) == FL_VALUE_TYPE_STRING) {
-        g_free(self->mask_style);
-        self->mask_style = g_strdup(fl_value_get_string(st));
-      }
-      FlValue* blur = fl_value_lookup_string(args, "blurSigma");
-      if (blur != nullptr &&
-          (fl_value_get_type(blur) == FL_VALUE_TYPE_FLOAT ||
-           fl_value_get_type(blur) == FL_VALUE_TYPE_INT)) {
-        self->mask_blur_sigma = fl_value_get_type(blur) == FL_VALUE_TYPE_FLOAT
-                                    ? fl_value_get_float(blur)
-                                    : (gdouble)fl_value_get_int(blur);
-      }
-      FlValue* bg = fl_value_lookup_string(args, "backgroundColor");
-      if (bg != nullptr && fl_value_get_type(bg) == FL_VALUE_TYPE_INT) {
-        self->mask_background_color = (guint32)fl_value_get_int(bg);
-      }
-      FlValue* fg = fl_value_lookup_string(args, "textColor");
-      if (fg != nullptr && fl_value_get_type(fg) == FL_VALUE_TYPE_INT) {
-        self->mask_text_color = (guint32)fl_value_get_int(fg);
-      }
-      FlValue* title = fl_value_lookup_string(args, "title");
-      if (title != nullptr && fl_value_get_type(title) == FL_VALUE_TYPE_STRING) {
-        g_free(self->mask_title);
-        self->mask_title = g_strdup(fl_value_get_string(title));
-      }
-      FlValue* subtitle = fl_value_lookup_string(args, "subtitle");
-      if (subtitle != nullptr &&
-          fl_value_get_type(subtitle) == FL_VALUE_TYPE_STRING) {
-        g_free(self->mask_subtitle);
-        self->mask_subtitle = g_strdup(fl_value_get_string(subtitle));
-      }
-      FlValue* show_lock = fl_value_lookup_string(args, "showLockIcon");
-      if (show_lock != nullptr &&
-          fl_value_get_type(show_lock) == FL_VALUE_TYPE_BOOL) {
-        self->mask_show_lock_icon = fl_value_get_bool(show_lock);
-      }
-      FlValue* blur_focus =
-          fl_value_lookup_string(args, "protectOnWindowBlur");
-      if (blur_focus != nullptr &&
-          fl_value_get_type(blur_focus) == FL_VALUE_TYPE_BOOL) {
-        self->protect_on_window_blur = fl_value_get_bool(blur_focus);
-      }
+  } else if (self->mask_enabled_by_secure) {
+    // Undo only the auto-armed fallback; keep explicit user mask config.
+    self->mask_enabled = FALSE;
+    self->mask_enabled_by_secure = FALSE;
+    if (self->focus_out_timeout_id != 0) {
+      g_source_remove(self->focus_out_timeout_id);
+      self->focus_out_timeout_id = 0;
     }
-    if (!self->mask_enabled || g_strcmp0(self->mask_style, "none") == 0) {
-      if (self->focus_out_timeout_id != 0) {
-        g_source_remove(self->focus_out_timeout_id);
-        self->focus_out_timeout_id = 0;
-      }
-      set_mask_visible(self, FALSE, "config_disabled");
-    } else {
-      apply_mask_styles(self);
-    }
-    g_autoptr(FlValue) res = fl_value_new_bool(TRUE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "configureWebProtection") == 0) {
-    g_autoptr(FlValue) res = fl_value_new_bool(FALSE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "isScreenBeingRecorded") == 0) {
-    g_autoptr(FlValue) res = fl_value_new_bool(FALSE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "getProtectionStatus") == 0) {
-    g_autoptr(FlValue) status = fl_value_new_map();
-    fl_value_set_string_take(status, "isSecureScreenEnabled",
-                             fl_value_new_bool(self->is_secure_screen_enabled));
-    fl_value_set_string_take(
-        status, "isAppSwitcherMaskEnabled",
-        fl_value_new_bool(self->mask_enabled &&
-                          g_strcmp0(self->mask_style, "none") != 0));
-    fl_value_set_string_take(status, "isScreenBeingRecorded",
-                             fl_value_new_bool(FALSE));
-    fl_value_set_string_take(
-        status, "isMaskCurrentlyVisible",
-        fl_value_new_bool(self->is_mask_currently_visible));
-    fl_value_set_string_take(status, "platform", fl_value_new_string("linux"));
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(status));
-  } else if (strcmp(method, "getCapabilities") == 0) {
-    response = get_linux_capabilities_response();
-  } else if (strcmp(method, "showPrivacyMask") == 0) {
-    set_mask_visible(self, TRUE, "manual");
-    g_autoptr(FlValue) res = fl_value_new_bool(TRUE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else if (strcmp(method, "hidePrivacyMask") == 0) {
-    set_mask_visible(self, FALSE, "manual");
-    g_autoptr(FlValue) res = fl_value_new_bool(TRUE);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(res));
-  } else {
-    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    set_mask_visible(self, FALSE, "secure_disabled");
   }
-
-  fl_method_call_respond(method_call, response, nullptr);
+  return xue_hua_screen_protection_screen_protection_host_api_set_secure_screen_response_new(
+      TRUE);
 }
 
-static FlMethodErrorResponse* event_channel_listen_cb(FlEventChannel* channel,
-                                                      FlValue* args,
-                                                      gpointer user_data) {
+static XueHuaScreenProtectionScreenProtectionHostApiIsSecureScreenEnabledResponse*
+handle_is_secure_screen_enabled(gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
-  self->event_channel_listening = TRUE;
-  return nullptr;
+  ensure_window_signals_connected(self);
+  return xue_hua_screen_protection_screen_protection_host_api_is_secure_screen_enabled_response_new(
+      self->is_secure_screen_enabled);
 }
 
-static FlMethodErrorResponse* event_channel_cancel_cb(FlEventChannel* channel,
-                                                      FlValue* args,
-                                                      gpointer user_data) {
+static XueHuaScreenProtectionScreenProtectionHostApiConfigureAppSwitcherProtectionResponse*
+handle_configure_app_switcher_protection(
+    XueHuaScreenProtectionScreenProtectionMaskConfigMessage* config,
+    gpointer user_data) {
   XueHuaScreenProtectionPlugin* self =
       XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
-  self->event_channel_listening = FALSE;
-  return nullptr;
+  ensure_window_signals_connected(self);
+
+  self->mask_enabled =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_enabled(
+          config);
+  self->mask_enabled_by_secure = FALSE;
+  self->mask_style =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_style(
+          config);
+  self->mask_blur_sigma =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_blur_sigma(
+          config);
+  self->mask_background_color = static_cast<guint32>(
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_background_color(
+          config));
+  self->mask_text_color = static_cast<guint32>(
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_text_color(
+          config));
+
+  const gchar* title =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_title(
+          config);
+  g_free(self->mask_title);
+  self->mask_title = g_strdup(
+      (title != nullptr && title[0] != '\0') ? title : "Privacy Protected");
+
+  const gchar* subtitle =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_subtitle(
+          config);
+  g_free(self->mask_subtitle);
+  self->mask_subtitle = g_strdup(subtitle != nullptr ? subtitle : "");
+
+  self->mask_show_lock_icon =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_show_lock_icon(
+          config);
+  self->protect_on_window_blur =
+      xue_hua_screen_protection_screen_protection_mask_config_message_get_protect_on_window_blur(
+          config);
+
+  if (!self->mask_enabled ||
+      self->mask_style ==
+          XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE) {
+    if (self->focus_out_timeout_id != 0) {
+      g_source_remove(self->focus_out_timeout_id);
+      self->focus_out_timeout_id = 0;
+    }
+    set_mask_visible(self, FALSE, "config_disabled");
+  } else {
+    apply_mask_styles(self);
+  }
+  return xue_hua_screen_protection_screen_protection_host_api_configure_app_switcher_protection_response_new(
+      TRUE);
 }
+
+static XueHuaScreenProtectionScreenProtectionHostApiConfigureWebProtectionResponse*
+handle_configure_web_protection(
+    XueHuaScreenProtectionWebProtectionConfigMessage* /*config*/,
+    gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+  return xue_hua_screen_protection_screen_protection_host_api_configure_web_protection_response_new(
+      FALSE);
+}
+
+static XueHuaScreenProtectionScreenProtectionHostApiIsScreenBeingRecordedResponse*
+handle_is_screen_being_recorded(gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+  return xue_hua_screen_protection_screen_protection_host_api_is_screen_being_recorded_response_new(
+      FALSE);
+}
+
+static XueHuaScreenProtectionScreenProtectionHostApiGetProtectionStatusResponse*
+handle_get_protection_status(gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+
+  g_autoptr(XueHuaScreenProtectionScreenProtectionStatusMessage) status =
+      xue_hua_screen_protection_screen_protection_status_message_new(
+          self->is_secure_screen_enabled,
+          self->mask_enabled &&
+              self->mask_style !=
+                  XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_NONE,
+          FALSE, self->is_mask_currently_visible, "linux");
+  return xue_hua_screen_protection_screen_protection_host_api_get_protection_status_response_new(
+      status);
+}
+
+static XueHuaScreenProtectionScreenProtectionHostApiGetCapabilitiesResponse*
+handle_get_capabilities(gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+
+  g_autoptr(XueHuaScreenProtectionScreenProtectionCapabilitiesMessage) caps =
+      get_linux_capabilities_message();
+  return xue_hua_screen_protection_screen_protection_host_api_get_capabilities_response_new(
+      caps);
+}
+
+static XueHuaScreenProtectionScreenProtectionHostApiShowPrivacyMaskResponse*
+handle_show_privacy_mask(gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+  set_mask_visible(self, TRUE, "manual");
+  return xue_hua_screen_protection_screen_protection_host_api_show_privacy_mask_response_new(
+      TRUE);
+}
+
+static XueHuaScreenProtectionScreenProtectionHostApiHidePrivacyMaskResponse*
+handle_hide_privacy_mask(gpointer user_data) {
+  XueHuaScreenProtectionPlugin* self =
+      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
+  ensure_window_signals_connected(self);
+  set_mask_visible(self, FALSE, "manual");
+  return xue_hua_screen_protection_screen_protection_host_api_hide_privacy_mask_response_new(
+      TRUE);
+}
+
+static const XueHuaScreenProtectionScreenProtectionHostApiVTable
+    kHostApiVTable = {
+        .set_secure_screen = handle_set_secure_screen,
+        .is_secure_screen_enabled = handle_is_secure_screen_enabled,
+        .configure_app_switcher_protection =
+            handle_configure_app_switcher_protection,
+        .configure_web_protection = handle_configure_web_protection,
+        .is_screen_being_recorded = handle_is_screen_being_recorded,
+        .get_protection_status = handle_get_protection_status,
+        .get_capabilities = handle_get_capabilities,
+        .show_privacy_mask = handle_show_privacy_mask,
+        .hide_privacy_mask = handle_hide_privacy_mask,
+};
 
 static void xue_hua_screen_protection_plugin_dispose(GObject* object) {
   XueHuaScreenProtectionPlugin* self =
@@ -585,11 +600,8 @@ static void xue_hua_screen_protection_plugin_dispose(GObject* object) {
     self->mask_subtitle_label = nullptr;
   }
   g_clear_object(&self->mask_css_provider);
-  g_clear_object(&self->method_channel);
-  g_clear_object(&self->event_channel);
+  g_clear_object(&self->flutter_api);
   g_clear_object(&self->registrar);
-  g_free(self->mask_style);
-  self->mask_style = nullptr;
   g_free(self->mask_title);
   self->mask_title = nullptr;
   g_free(self->mask_subtitle);
@@ -609,7 +621,8 @@ static void xue_hua_screen_protection_plugin_init(
   self->is_mask_currently_visible = FALSE;
   self->mask_enabled = FALSE;
   self->mask_enabled_by_secure = FALSE;
-  self->mask_style = g_strdup("blur");
+  self->mask_style =
+      XUE_HUA_SCREEN_PROTECTION_SCREEN_PROTECTION_MASK_STYLE_MESSAGE_BLUR;
   self->mask_blur_sigma = 20.0;
   self->mask_background_color = 0xEB0F172A;
   self->mask_text_color = 0xFFFFFFFF;
@@ -618,7 +631,6 @@ static void xue_hua_screen_protection_plugin_init(
       "Screen content is hidden to protect sensitive information.");
   self->mask_show_lock_icon = TRUE;
   self->protect_on_window_blur = TRUE;
-  self->event_channel_listening = FALSE;
   self->mask_overlay = nullptr;
   self->mask_title_label = nullptr;
   self->mask_subtitle_label = nullptr;
@@ -627,37 +639,21 @@ static void xue_hua_screen_protection_plugin_init(
   self->focus_out_timeout_id = 0;
 }
 
-static void method_call_cb(FlMethodChannel* channel,
-                           FlMethodCall* method_call,
-                           gpointer user_data) {
-  XueHuaScreenProtectionPlugin* plugin =
-      XUE_HUA_SCREEN_PROTECTION_PLUGIN(user_data);
-  xue_hua_screen_protection_plugin_handle_method_call(plugin, method_call);
-}
-
 void xue_hua_screen_protection_plugin_register_with_registrar(
     FlPluginRegistrar* registrar) {
   XueHuaScreenProtectionPlugin* plugin = XUE_HUA_SCREEN_PROTECTION_PLUGIN(
       g_object_new(xue_hua_screen_protection_plugin_get_type(), nullptr));
 
   plugin->registrar = FL_PLUGIN_REGISTRAR(g_object_ref(registrar));
+  FlBinaryMessenger* messenger = fl_plugin_registrar_get_messenger(registrar);
 
-  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  plugin->method_channel =
-      fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                            "com.kurban.xue_hua_screen_protection/methods",
-                            FL_METHOD_CODEC(codec));
-  fl_method_channel_set_method_call_handler(
-      plugin->method_channel, method_call_cb, g_object_ref(plugin),
+  plugin->flutter_api =
+      xue_hua_screen_protection_screen_protection_flutter_api_new(messenger,
+                                                                  nullptr);
+
+  xue_hua_screen_protection_screen_protection_host_api_set_method_handlers(
+      messenger, nullptr, &kHostApiVTable, g_object_ref(plugin),
       g_object_unref);
-
-  plugin->event_channel =
-      fl_event_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                           "com.kurban.xue_hua_screen_protection/events",
-                           FL_METHOD_CODEC(codec));
-  fl_event_channel_set_stream_handlers(
-      plugin->event_channel, event_channel_listen_cb, event_channel_cancel_cb,
-      g_object_ref(plugin), g_object_unref);
 
   g_object_unref(plugin);
 }

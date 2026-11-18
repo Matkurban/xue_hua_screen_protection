@@ -1,14 +1,11 @@
 import 'dart:async';
 
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
-import 'package:xue_hua_screen_protection/xue_hua_screen_protection_method_channel.dart';
 
 class MockXueHuaScreenProtectionPlatform
-    with MockPlatformInterfaceMixin
-    implements XueHuaScreenProtectionPlatform {
+    extends XueHuaScreenProtectionPlatform {
   bool secureEnabled = false;
   bool maskVisible = false;
   ScreenProtectionMaskConfig maskConfig = const ScreenProtectionMaskConfig();
@@ -47,7 +44,8 @@ class MockXueHuaScreenProtectionPlatform
     return ScreenProtectionStatus(
       isSecureScreenEnabled: secureEnabled,
       isAppSwitcherMaskEnabled:
-          maskConfig.enabled && maskConfig.style != ScreenProtectionMaskStyle.none,
+          maskConfig.enabled &&
+          maskConfig.style != ScreenProtectionMaskStyle.none,
       isScreenBeingRecorded: false,
       isMaskCurrentlyVisible: maskVisible,
       platform: 'macos',
@@ -90,10 +88,10 @@ void main() {
   final XueHuaScreenProtectionPlatform initialPlatform =
       XueHuaScreenProtectionPlatform.instance;
 
-  test('$MethodChannelXueHuaScreenProtection is the default instance', () {
+  test('$PigeonXueHuaScreenProtection is the default instance', () {
     expect(
       initialPlatform,
-      isInstanceOf<MethodChannelXueHuaScreenProtection>(),
+      isInstanceOf<PigeonXueHuaScreenProtection>(),
     );
   });
 
@@ -168,33 +166,38 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(capturedEvents, hasLength(1));
-    expect(capturedEvents.first.type, ScreenProtectionEventType.screenshotTaken);
+    expect(
+      capturedEvents.first.type,
+      ScreenProtectionEventType.screenshotTaken,
+    );
     expect(recordingStates, equals(<bool>[true, false]));
 
     await sub1.cancel();
     await sub2.cancel();
   });
 
-  testWidgets('ScreenProtectionWatermark and ScreenProtectionScope render cleanly',
-      (WidgetTester tester) async {
-    final mockPlatform = MockXueHuaScreenProtectionPlatform();
-    XueHuaScreenProtectionPlatform.instance = mockPlatform;
+  testWidgets(
+    'ScreenProtectionWatermark and ScreenProtectionScope render cleanly',
+    (WidgetTester tester) async {
+      final mockPlatform = MockXueHuaScreenProtectionPlatform();
+      XueHuaScreenProtectionPlatform.instance = mockPlatform;
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: ScreenProtectionScope(
-          enableSecureScreen: true,
-          watermarkText: 'CONFIDENTIAL',
-          watermarkSubText: 'USER-01',
-          child: Scaffold(
-            body: Text('Secret Document'),
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ScreenProtectionScope(
+            enableSecureScreen: true,
+            watermarkText: 'CONFIDENTIAL',
+            watermarkSubText: 'USER-01',
+            child: Scaffold(
+              body: Text('Secret Document'),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.text('Secret Document'), findsOneWidget);
-    expect(mockPlatform.secureEnabled, isTrue);
-  });
+      expect(find.text('Secret Document'), findsOneWidget);
+      expect(mockPlatform.secureEnabled, isTrue);
+    },
+  );
 }

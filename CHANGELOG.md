@@ -1,3 +1,10 @@
+## 1.1.0
+
+* Replace `plugin_platform_interface` and manual `MethodChannel` / `EventChannel` string-map serialization with strongly-typed **Pigeon (`^30.0.3`)** code generation (`pigeons/messages.dart`, `ScreenProtectionHostApi`, `ScreenProtectionFlutterApi`, and `PigeonXueHuaScreenProtection`).
+* Refactor Android (`Kotlin`), iOS (`Swift`), macOS (`Swift`), Windows (`C++`), and Linux (`GObject C/C++`) native plugin implementations to implement Pigeon's generated `ScreenProtectionHostApi` interface and stream real-time security events through `ScreenProtectionFlutterApi`.
+* Remove the `plugin_platform_interface` runtime dependency while preserving 100% backward compatibility for all public Dart APIs (`XueHuaScreenProtection`, `ScreenProtectionScope`, `ScreenProtectionWatermark`, `ScreenProtectionMaskConfig`, `WebProtectionConfig`, `ScreenProtectionStatus`, `ScreenProtectionCapabilities`, `ScreenProtectionEvent`).
+* Verify Windows (`C++17`) and Linux (`GObject C++17`) native sources under Clang (`-Wall -Wextra -Werror`) with zero warnings and zero errors.
+
 ## 1.0.6
 
 * Fix `ScreenProtectionScope` leaving screen protection or app-switcher privacy mask (`configureAppSwitcherProtection`) active after the protected page is disposed or navigated away from.

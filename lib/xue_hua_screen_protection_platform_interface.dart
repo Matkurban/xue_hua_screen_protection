@@ -1,32 +1,25 @@
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
 import 'src/models/screen_protection_models.dart';
-import 'xue_hua_screen_protection_method_channel.dart';
+import 'xue_hua_screen_protection_pigeon.dart';
 
-/// The interface that implementations of `xue_hua_screen_protection` must
-/// implement.
+/// Base contract for `xue_hua_screen_protection` host implementations.
 ///
-/// Platform implementations should extend this class rather than implement it
-/// directly, as newly added methods are not considered breaking changes.
-abstract class XueHuaScreenProtectionPlatform extends PlatformInterface {
+/// Uses Pigeon-generated strongly-typed channels ([PigeonXueHuaScreenProtection])
+/// by default on native platforms without depending on `plugin_platform_interface`.
+abstract class XueHuaScreenProtectionPlatform {
   /// Constructs a [XueHuaScreenProtectionPlatform].
-  XueHuaScreenProtectionPlatform() : super(token: _token);
-
-  static final Object _token = Object();
+  XueHuaScreenProtectionPlatform();
 
   static XueHuaScreenProtectionPlatform? _instance;
 
-  /// The default instance of [XueHuaScreenProtectionPlatform] to use.
+  /// The active [XueHuaScreenProtectionPlatform] instance.
   ///
-  /// Defaults to [MethodChannelXueHuaScreenProtection], created lazily.
+  /// Defaults to [PigeonXueHuaScreenProtection], created lazily.
   static XueHuaScreenProtectionPlatform get instance =>
-      _instance ??= MethodChannelXueHuaScreenProtection();
+      _instance ??= PigeonXueHuaScreenProtection();
 
-  /// Platform-specific implementations should set this with their own
-  /// platform-specific class that extends [XueHuaScreenProtectionPlatform] when
-  /// they register themselves.
+  /// Overrides the active [XueHuaScreenProtectionPlatform] instance (for Web
+  /// plugin registration or testing).
   static set instance(XueHuaScreenProtectionPlatform instance) {
-    PlatformInterface.verifyToken(instance, _token);
     _instance = instance;
   }
 

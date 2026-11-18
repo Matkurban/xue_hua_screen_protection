@@ -2,28 +2,24 @@ import Cocoa
 import CoreGraphics
 import FlutterMacOS
 
-/// macOS implementation of `xue_hua_screen_protection`.
+/// macOS implementation of `xue_hua_screen_protection` powered by Pigeon.
 ///
 /// Capabilities:
 /// - Hardware screenshot, recording, and window-sharing prevention via `NSWindow.sharingType = .none`.
 /// - Screenshot detection via `NSMetadataQuery` (`kMDItemIsScreenCapture = 1`) plus pasteboard image change polling.
 /// - Screen recording / window capture detection via `CGWindowListCopyWindowInfo` and known capture helper apps.
 /// - Inactive window / app-switcher privacy mask using `NSVisualEffectView` blur or solid color overlay.
-public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
-    private static let methodChannelName = "com.kurban.xue_hua_screen_protection/methods"
-    private static let eventChannelName = "com.kurban.xue_hua_screen_protection/events"
-
+public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, ScreenProtectionHostApi {
     private weak var registrar: FlutterPluginRegistrar?
-    private var methodChannel: FlutterMethodChannel?
-    private var eventSink: FlutterEventSink?
+    private var flutterApi: ScreenProtectionFlutterApi?
 
-    private var isSecureScreenEnabled: Bool = false
+    private var secureScreenEnabledState: Bool = false
     private var isMaskCurrentlyVisible: Bool = false
-    private var isScreenBeingRecorded: Bool = false
+    private var screenBeingRecordedState: Bool = false
 
     // Mask configuration
     private var maskEnabled: Bool = false
-    private var maskStyle: String = "blur"
+    private var maskStyle: ScreenProtectionMaskStyleMessage = .blur
     private var maskBlurSigma: Double = 20.0
     private var maskBackgroundColor: NSColor = .init(srgbRed: 15.0 / 255.0, green: 23.0 / 255.0, blue: 42.0 / 255.0, alpha: 0.92)
     private var maskTextColor: NSColor = .white
@@ -41,20 +37,10 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     private var lastPasteboardChangeCount: Int = NSPasteboard.general.changeCount
 
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let methodChannel = FlutterMethodChannel(
-            name: methodChannelName,
-            binaryMessenger: registrar.messenger
-        )
-        let eventChannel = FlutterEventChannel(
-            name: eventChannelName,
-            binaryMessenger: registrar.messenger
-        )
-
         let instance = XueHuaScreenProtectionPlugin()
         instance.registrar = registrar
-        instance.methodChannel = methodChannel
-        registrar.addMethodCallDelegate(instance, channel: methodChannel)
-        eventChannel.setStreamHandler(instance)
+        instance.flutterApi = ScreenProtectionFlutterApi(binaryMessenger: registrar.messenger)
+        ScreenProtectionHostApiSetup.setUp(binaryMessenger: registrar.messenger, api: instance)
         instance.setupNotificationsAndMonitors()
     }
 
@@ -65,105 +51,107 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         pasteboardPollTimer?.invalidate()
     }
 
-    public func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-        eventSink = events
-        return nil
+    // MARK: - ScreenProtectionHostApi (Pigeon)
+
+    func setSecureScreen(enabled: Bool) throws -> Bool {
+        secureScreenEnabledState = enabled
+        if Thread.isMainThread {
+            applyWindowSharingType(enabled: secureScreenEnabledState)
+        } else {
+            DispatchQueue.main.async {
+                self.applyWindowSharingType(enabled: self.secureScreenEnabledState)
+            }
+        }
+        return true
     }
 
-    public func onCancel(withArguments _: Any?) -> FlutterError? {
-        eventSink = nil
-        return nil
+    func isSecureScreenEnabled() throws -> Bool {
+        return secureScreenEnabledState
     }
 
-    // MARK: - MethodChannel Dispatch
+    func configureAppSwitcherProtection(config: ScreenProtectionMaskConfigMessage) throws -> Bool {
+        maskEnabled = config.enabled
+        maskStyle = config.style
+        maskBlurSigma = config.blurSigma
+        maskBackgroundColor = Self.colorFromARGB(config.backgroundColor)
+        maskTextColor = Self.colorFromARGB(config.textColor)
+        maskTitle = config.title.isEmpty ? "Privacy Protected" : config.title
+        maskSubtitle = config.subtitle
+        maskShowLockIcon = config.showLockIcon
+        protectOnWindowBlur = config.protectOnWindowBlur
 
-    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        switch call.method {
-        case "setSecureScreen":
-            let args = call.arguments as? [String: Any]
-            let enabled = args?["enabled"] as? Bool ?? false
-            isSecureScreenEnabled = enabled
-            DispatchQueue.main.async {
-                self.applyWindowSharingType(enabled: self.isSecureScreenEnabled)
-                result(true)
+        let updateBlock = {
+            if !self.maskEnabled || self.maskStyle == .none {
+                self.setPrivacyOverlayVisible(false, reason: "config_disabled")
+            } else if self.isMaskCurrentlyVisible {
+                self.rebuildPrivacyOverlayIfNeeded()
             }
+        }
+        if Thread.isMainThread {
+            updateBlock()
+        } else {
+            DispatchQueue.main.async(execute: updateBlock)
+        }
+        return true
+    }
 
-        case "isSecureScreenEnabled":
-            result(isSecureScreenEnabled)
+    func configureWebProtection(config: WebProtectionConfigMessage) throws -> Bool {
+        return false
+    }
 
-        case "configureAppSwitcherProtection":
-            let args = call.arguments as? [String: Any] ?? [:]
-            maskEnabled = args["enabled"] as? Bool ?? true
-            maskStyle = args["style"] as? String ?? "blur"
-            maskBlurSigma = args["blurSigma"] as? Double ?? 20.0
-            if let bgInt = args["backgroundColor"] as? Int {
-                maskBackgroundColor = Self.colorFromARGB(bgInt)
-            }
-            if let fgInt = args["textColor"] as? Int {
-                maskTextColor = Self.colorFromARGB(fgInt)
-            }
-            maskTitle = args["title"] as? String ?? "Privacy Protected"
-            maskSubtitle = args["subtitle"] as? String ?? ""
-            maskShowLockIcon = args["showLockIcon"] as? Bool ?? true
-            protectOnWindowBlur = args["protectOnWindowBlur"] as? Bool ?? true
+    func isScreenBeingRecorded() throws -> Bool {
+        checkRecordingState(emitIfChanged: false)
+        return screenBeingRecordedState
+    }
 
-            DispatchQueue.main.async {
-                if !self.maskEnabled || self.maskStyle == "none" {
-                    self.setPrivacyOverlayVisible(false, reason: "config_disabled")
-                } else if self.isMaskCurrentlyVisible {
-                    self.rebuildPrivacyOverlayIfNeeded()
-                }
-                result(true)
-            }
+    func getProtectionStatus() throws -> ScreenProtectionStatusMessage {
+        checkRecordingState(emitIfChanged: false)
+        return ScreenProtectionStatusMessage(
+            isSecureScreenEnabled: secureScreenEnabledState,
+            isAppSwitcherMaskEnabled: maskEnabled && maskStyle != .none,
+            isScreenBeingRecorded: screenBeingRecordedState,
+            isMaskCurrentlyVisible: isMaskCurrentlyVisible,
+            platform: "macos"
+        )
+    }
 
-        case "configureWebProtection":
-            result(false)
+    func getCapabilities() throws -> ScreenProtectionCapabilitiesMessage {
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        return ScreenProtectionCapabilitiesMessage(
+            platform: "macos",
+            osVersion: "macOS \(osVersion)",
+            supportsHardwareAntiScreenshot: true,
+            supportsHardwareAntiRecording: true,
+            supportsScreenshotDetection: true,
+            supportsRecordingDetection: true,
+            supportsNativeAppSwitcherMask: true,
+            supportsNativeBlurEffect: true,
+            limitations: [
+                "macOS NSWindow.sharingType = .none excludes the application window from system screenshots, QuickTime recordings, and screen-sharing streams.",
+            ]
+        )
+    }
 
-        case "isScreenBeingRecorded":
-            checkRecordingState(emitIfChanged: false)
-            result(isScreenBeingRecorded)
-
-        case "getProtectionStatus":
-            checkRecordingState(emitIfChanged: false)
-            result([
-                "isSecureScreenEnabled": isSecureScreenEnabled,
-                "isAppSwitcherMaskEnabled": maskEnabled && maskStyle != "none",
-                "isScreenBeingRecorded": isScreenBeingRecorded,
-                "isMaskCurrentlyVisible": isMaskCurrentlyVisible,
-                "platform": "macos",
-            ])
-
-        case "getCapabilities":
-            let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
-            result([
-                "platform": "macos",
-                "osVersion": "macOS \(osVersion)",
-                "supportsHardwareAntiScreenshot": true,
-                "supportsHardwareAntiRecording": true,
-                "supportsScreenshotDetection": true,
-                "supportsRecordingDetection": true,
-                "supportsNativeAppSwitcherMask": true,
-                "supportsNativeBlurEffect": true,
-                "limitations": [
-                    "macOS NSWindow.sharingType = .none excludes the application window from system screenshots, QuickTime recordings, and screen-sharing streams.",
-                ],
-            ])
-
-        case "showPrivacyMask":
+    func showPrivacyMask() throws -> Bool {
+        if Thread.isMainThread {
+            setPrivacyOverlayVisible(true, reason: "manual")
+        } else {
             DispatchQueue.main.async {
                 self.setPrivacyOverlayVisible(true, reason: "manual")
-                result(true)
             }
+        }
+        return true
+    }
 
-        case "hidePrivacyMask":
+    func hidePrivacyMask() throws -> Bool {
+        if Thread.isMainThread {
+            setPrivacyOverlayVisible(false, reason: "manual")
+        } else {
             DispatchQueue.main.async {
                 self.setPrivacyOverlayVisible(false, reason: "manual")
-                result(true)
             }
-
-        default:
-            result(FlutterMethodNotImplemented)
         }
+        return true
     }
 
     // MARK: - Window Sharing Protection
@@ -184,7 +172,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     }
 
     private func applyWindowSharingType(enabled: Bool) {
-        isSecureScreenEnabled = enabled
+        secureScreenEnabledState = enabled
         let sharingType: NSWindow.SharingType = enabled ? .none : .readOnly
         for window in targetWindows() {
             window.sharingType = sharingType
@@ -277,7 +265,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
             if !knownCaptureFiles.contains(path) {
                 knownCaptureFiles.insert(path)
                 emitEvent(
-                    type: "screenshotTaken",
+                    type: .screenshotTaken,
                     metadata: ["source": "NSMetadataQuery_kMDItemIsScreenCapture"]
                 )
                 break
@@ -287,14 +275,14 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
 
     private func checkRecordingState(emitIfChanged: Bool) {
         let recordingDetected = detectScreenRecording()
-        if emitIfChanged, recordingDetected != isScreenBeingRecorded {
-            isScreenBeingRecorded = recordingDetected
+        if emitIfChanged, recordingDetected != screenBeingRecordedState {
+            screenBeingRecordedState = recordingDetected
             emitEvent(
-                type: recordingDetected ? "recordingStarted" : "recordingStopped",
+                type: recordingDetected ? .recordingStarted : .recordingStopped,
                 metadata: ["source": "CGWindowList_and_capture_helpers"]
             )
         } else {
-            isScreenBeingRecorded = recordingDetected
+            screenBeingRecordedState = recordingDetected
         }
     }
 
@@ -353,7 +341,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         for item in items {
             if item.types.contains(where: { screenshotHints.contains($0) }) {
                 emitEvent(
-                    type: "screenshotTaken",
+                    type: .screenshotTaken,
                     metadata: ["source": "NSPasteboard_screen_capture"]
                 )
                 return
@@ -362,13 +350,13 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
     }
 
     @objc private func handleAppWillResignActive() {
-        guard maskEnabled, maskStyle != "none" else { return }
+        guard maskEnabled, maskStyle != .none else { return }
         setPrivacyOverlayVisible(true, reason: "app_will_resign_active")
     }
 
     @objc private func handleAppDidBecomeActive() {
         setPrivacyOverlayVisible(false, reason: "app_did_become_active")
-        if isSecureScreenEnabled {
+        if secureScreenEnabledState {
             applyWindowSharingType(enabled: true)
         }
     }
@@ -377,7 +365,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         guard let window = notification.object as? NSWindow,
               window === primaryWindow()
         else { return }
-        if maskEnabled, maskStyle != "none", protectOnWindowBlur {
+        if maskEnabled, maskStyle != .none, protectOnWindowBlur {
             setPrivacyOverlayVisible(true, reason: "window_resigned_key")
         }
     }
@@ -387,7 +375,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
               window === primaryWindow()
         else { return }
         setPrivacyOverlayVisible(false, reason: "window_became_key")
-        if isSecureScreenEnabled {
+        if secureScreenEnabledState {
             applyWindowSharingType(enabled: true)
         }
     }
@@ -413,7 +401,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
             privacyOverlayView?.frame = contentView.bounds
             if !isMaskCurrentlyVisible {
                 isMaskCurrentlyVisible = true
-                emitEvent(type: "maskShown", metadata: ["reason": reason])
+                emitEvent(type: .maskShown, metadata: ["reason": reason])
             }
         } else {
             // Hide without destroying so Driver / focus churn can re-show quickly
@@ -421,7 +409,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
             privacyOverlayView?.isHidden = true
             if isMaskCurrentlyVisible {
                 isMaskCurrentlyVisible = false
-                emitEvent(type: "maskHidden", metadata: ["reason": reason])
+                emitEvent(type: .maskHidden, metadata: ["reason": reason])
             }
         }
     }
@@ -439,7 +427,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         container.autoresizingMask = [.width, .height]
         container.wantsLayer = true
 
-        if maskStyle == "blur" {
+        if maskStyle == .blur {
             let visualEffect = NSVisualEffectView(frame: container.bounds)
             visualEffect.autoresizingMask = [.width, .height]
             visualEffect.blendingMode = .withinWindow
@@ -506,7 +494,7 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
 
     // MARK: - Helpers & Event Emission
 
-    private static func colorFromARGB(_ argb: Int) -> NSColor {
+    private static func colorFromARGB(_ argb: Int64) -> NSColor {
         let a = CGFloat((argb >> 24) & 0xFF) / 255.0
         let r = CGFloat((argb >> 16) & 0xFF) / 255.0
         let g = CGFloat((argb >> 8) & 0xFF) / 255.0
@@ -514,17 +502,16 @@ public class XueHuaScreenProtectionPlugin: NSObject, FlutterPlugin, FlutterStrea
         return NSColor(srgbRed: r, green: g, blue: b, alpha: a)
     }
 
-    private func emitEvent(type: String, metadata: [String: Any] = [:]) {
-        let payload: [String: Any] = [
-            "type": type,
-            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
-            "platform": "macos",
-            "isCaptured": isScreenBeingRecorded,
-            "metadata": metadata,
-        ]
+    private func emitEvent(type: ScreenProtectionEventTypeMessage, metadata: [String: Any?] = [:]) {
+        let message = ScreenProtectionEventMessage(
+            type: type,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            platform: "macos",
+            isCaptured: screenBeingRecordedState,
+            metadata: metadata
+        )
         DispatchQueue.main.async {
-            self.eventSink?(payload)
-            self.methodChannel?.invokeMethod("onProtectionEvent", arguments: payload)
+            self.flutterApi?.onProtectionEvent(event: message) { _ in }
         }
     }
 }

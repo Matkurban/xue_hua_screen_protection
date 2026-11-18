@@ -18,6 +18,8 @@ set(PLUGIN_NAME "xue_hua_screen_protection_plugin")
 
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
+  "messages.g.cpp"
+  "messages.g.h"
   "xue_hua_screen_protection_plugin.cpp"
   "xue_hua_screen_protection_plugin.h"
 )

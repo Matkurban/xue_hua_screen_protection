@@ -3,21 +3,26 @@
 #include <gtest/gtest.h>
 
 #include "include/xue_hua_screen_protection/xue_hua_screen_protection_plugin.h"
+#include "messages.g.h"
 #include "xue_hua_screen_protection_plugin_private.h"
 
 namespace xue_hua_screen_protection {
 namespace test {
 
-TEST(XueHuaScreenProtectionPlugin, GetCapabilitiesReturnsLinuxMap) {
-  g_autoptr(FlMethodResponse) response = get_linux_capabilities_response();
-  ASSERT_NE(response, nullptr);
-  ASSERT_TRUE(FL_IS_METHOD_SUCCESS_RESPONSE(response));
-  FlValue* result = fl_method_success_response_get_result(
-      FL_METHOD_SUCCESS_RESPONSE(response));
-  ASSERT_EQ(fl_value_get_type(result), FL_VALUE_TYPE_MAP);
-  FlValue* platform = fl_value_lookup_string(result, "platform");
-  ASSERT_NE(platform, nullptr);
-  EXPECT_STREQ(fl_value_get_string(platform), "linux");
+TEST(XueHuaScreenProtectionPlugin, GetCapabilitiesReturnsPigeonLinuxMessage) {
+  g_autoptr(XueHuaScreenProtectionScreenProtectionCapabilitiesMessage) caps =
+      get_linux_capabilities_message();
+  ASSERT_NE(caps, nullptr);
+  EXPECT_STREQ(
+      xue_hua_screen_protection_screen_protection_capabilities_message_get_platform(
+          caps),
+      "linux");
+  EXPECT_FALSE(
+      xue_hua_screen_protection_screen_protection_capabilities_message_get_supports_hardware_anti_screenshot(
+          caps));
+  EXPECT_TRUE(
+      xue_hua_screen_protection_screen_protection_capabilities_message_get_supports_native_app_switcher_mask(
+          caps));
 }
 
 }  // namespace test

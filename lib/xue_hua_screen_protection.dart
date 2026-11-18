@@ -2,9 +2,21 @@ import 'src/models/screen_protection_models.dart';
 import 'src/widgets/screen_protection_coordinator.dart';
 import 'xue_hua_screen_protection_platform_interface.dart';
 
+export 'src/messages.g.dart'
+    show
+        ScreenProtectionCapabilitiesMessage,
+        ScreenProtectionEventMessage,
+        ScreenProtectionEventTypeMessage,
+        ScreenProtectionFlutterApi,
+        ScreenProtectionHostApi,
+        ScreenProtectionMaskConfigMessage,
+        ScreenProtectionMaskStyleMessage,
+        ScreenProtectionStatusMessage,
+        WebProtectionConfigMessage;
 export 'src/models/screen_protection_models.dart';
 export 'src/widgets/screen_protection_scope.dart';
 export 'src/widgets/screen_protection_watermark.dart';
+export 'xue_hua_screen_protection_pigeon.dart';
 export 'xue_hua_screen_protection_platform_interface.dart';
 
 /// Unified controller for cross-platform screen privacy protection,

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../messages.g.dart';
+
 /// Visual style applied to the native or DOM privacy overlay when the app
 /// enters the background, app switcher, or loses window focus.
 enum ScreenProtectionMaskStyle {
@@ -28,6 +30,34 @@ enum ScreenProtectionMaskStyle {
         return ScreenProtectionMaskStyle.none;
       default:
         return ScreenProtectionMaskStyle.blur;
+    }
+  }
+
+  /// Converts a Pigeon [ScreenProtectionMaskStyleMessage] into a
+  /// [ScreenProtectionMaskStyle].
+  static ScreenProtectionMaskStyle fromPigeon(
+    ScreenProtectionMaskStyleMessage style,
+  ) {
+    switch (style) {
+      case ScreenProtectionMaskStyleMessage.blur:
+        return ScreenProtectionMaskStyle.blur;
+      case ScreenProtectionMaskStyleMessage.solidColor:
+        return ScreenProtectionMaskStyle.solidColor;
+      case ScreenProtectionMaskStyleMessage.none:
+        return ScreenProtectionMaskStyle.none;
+    }
+  }
+
+  /// Converts this [ScreenProtectionMaskStyle] into a Pigeon
+  /// [ScreenProtectionMaskStyleMessage].
+  ScreenProtectionMaskStyleMessage toPigeon() {
+    switch (this) {
+      case ScreenProtectionMaskStyle.blur:
+        return ScreenProtectionMaskStyleMessage.blur;
+      case ScreenProtectionMaskStyle.solidColor:
+        return ScreenProtectionMaskStyleMessage.solidColor;
+      case ScreenProtectionMaskStyle.none:
+        return ScreenProtectionMaskStyleMessage.none;
     }
   }
 }
@@ -92,7 +122,40 @@ class ScreenProtectionMaskConfig {
   /// privacy overlay.
   final bool protectOnWindowBlur;
 
-  /// Serializes this configuration to a platform-channel compatible map.
+  /// Converts this configuration to a Pigeon [ScreenProtectionMaskConfigMessage].
+  ScreenProtectionMaskConfigMessage toPigeon() {
+    return ScreenProtectionMaskConfigMessage(
+      enabled: enabled && style != ScreenProtectionMaskStyle.none,
+      style: style.toPigeon(),
+      blurSigma: blurSigma,
+      backgroundColor: backgroundColor.toARGB32(),
+      textColor: textColor.toARGB32(),
+      title: title ?? '',
+      subtitle: subtitle ?? '',
+      showLockIcon: showLockIcon,
+      protectOnWindowBlur: protectOnWindowBlur,
+    );
+  }
+
+  /// Creates a [ScreenProtectionMaskConfig] from a Pigeon
+  /// [ScreenProtectionMaskConfigMessage].
+  factory ScreenProtectionMaskConfig.fromPigeon(
+    ScreenProtectionMaskConfigMessage message,
+  ) {
+    return ScreenProtectionMaskConfig(
+      enabled: message.enabled,
+      style: ScreenProtectionMaskStyle.fromPigeon(message.style),
+      blurSigma: message.blurSigma,
+      backgroundColor: Color(message.backgroundColor),
+      textColor: Color(message.textColor),
+      title: message.title,
+      subtitle: message.subtitle,
+      showLockIcon: message.showLockIcon,
+      protectOnWindowBlur: message.protectOnWindowBlur,
+    );
+  }
+
+  /// Serializes this configuration to a map.
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'enabled': enabled && style != ScreenProtectionMaskStyle.none,
@@ -212,6 +275,28 @@ class WebProtectionConfig {
   /// (`document.hidden`) or the browser window loses focus.
   final bool blurOnVisibilityChange;
 
+  /// Converts this configuration to a Pigeon [WebProtectionConfigMessage].
+  WebProtectionConfigMessage toPigeon() {
+    return WebProtectionConfigMessage(
+      disableContextMenu: disableContextMenu,
+      disablePrint: disablePrint,
+      disableDragAndSelect: disableDragAndSelect,
+      interceptCaptureShortcuts: interceptCaptureShortcuts,
+      blurOnVisibilityChange: blurOnVisibilityChange,
+    );
+  }
+
+  /// Creates a [WebProtectionConfig] from a Pigeon [WebProtectionConfigMessage].
+  factory WebProtectionConfig.fromPigeon(WebProtectionConfigMessage message) {
+    return WebProtectionConfig(
+      disableContextMenu: message.disableContextMenu,
+      disablePrint: message.disablePrint,
+      disableDragAndSelect: message.disableDragAndSelect,
+      interceptCaptureShortcuts: message.interceptCaptureShortcuts,
+      blurOnVisibilityChange: message.blurOnVisibilityChange,
+    );
+  }
+
   /// Serializes this configuration to a map.
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -305,7 +390,32 @@ class ScreenProtectionStatus {
   /// `windows`, `linux`, `web`).
   final String platform;
 
-  /// Creates a [ScreenProtectionStatus] from a platform channel map.
+  /// Creates a [ScreenProtectionStatus] from a Pigeon
+  /// [ScreenProtectionStatusMessage].
+  factory ScreenProtectionStatus.fromPigeon(
+    ScreenProtectionStatusMessage message,
+  ) {
+    return ScreenProtectionStatus(
+      isSecureScreenEnabled: message.isSecureScreenEnabled,
+      isAppSwitcherMaskEnabled: message.isAppSwitcherMaskEnabled,
+      isScreenBeingRecorded: message.isScreenBeingRecorded,
+      isMaskCurrentlyVisible: message.isMaskCurrentlyVisible,
+      platform: message.platform,
+    );
+  }
+
+  /// Converts this status to a Pigeon [ScreenProtectionStatusMessage].
+  ScreenProtectionStatusMessage toPigeon() {
+    return ScreenProtectionStatusMessage(
+      isSecureScreenEnabled: isSecureScreenEnabled,
+      isAppSwitcherMaskEnabled: isAppSwitcherMaskEnabled,
+      isScreenBeingRecorded: isScreenBeingRecorded,
+      isMaskCurrentlyVisible: isMaskCurrentlyVisible,
+      platform: platform,
+    );
+  }
+
+  /// Creates a [ScreenProtectionStatus] from a map.
   factory ScreenProtectionStatus.fromMap(Map<Object?, Object?> map) {
     return ScreenProtectionStatus(
       isSecureScreenEnabled: (map['isSecureScreenEnabled'] as bool?) ?? false,
@@ -410,7 +520,41 @@ class ScreenProtectionCapabilities {
   /// Platform-specific notes or security limitations to be aware of.
   final List<String> limitations;
 
-  /// Creates a [ScreenProtectionCapabilities] from a platform channel map.
+  /// Creates a [ScreenProtectionCapabilities] from a Pigeon
+  /// [ScreenProtectionCapabilitiesMessage].
+  factory ScreenProtectionCapabilities.fromPigeon(
+    ScreenProtectionCapabilitiesMessage message,
+  ) {
+    return ScreenProtectionCapabilities(
+      platform: message.platform,
+      osVersion: message.osVersion,
+      supportsHardwareAntiScreenshot: message.supportsHardwareAntiScreenshot,
+      supportsHardwareAntiRecording: message.supportsHardwareAntiRecording,
+      supportsScreenshotDetection: message.supportsScreenshotDetection,
+      supportsRecordingDetection: message.supportsRecordingDetection,
+      supportsNativeAppSwitcherMask: message.supportsNativeAppSwitcherMask,
+      supportsNativeBlurEffect: message.supportsNativeBlurEffect,
+      limitations: List<String>.unmodifiable(message.limitations),
+    );
+  }
+
+  /// Converts these capabilities to a Pigeon
+  /// [ScreenProtectionCapabilitiesMessage].
+  ScreenProtectionCapabilitiesMessage toPigeon() {
+    return ScreenProtectionCapabilitiesMessage(
+      platform: platform,
+      osVersion: osVersion,
+      supportsHardwareAntiScreenshot: supportsHardwareAntiScreenshot,
+      supportsHardwareAntiRecording: supportsHardwareAntiRecording,
+      supportsScreenshotDetection: supportsScreenshotDetection,
+      supportsRecordingDetection: supportsRecordingDetection,
+      supportsNativeAppSwitcherMask: supportsNativeAppSwitcherMask,
+      supportsNativeBlurEffect: supportsNativeBlurEffect,
+      limitations: limitations,
+    );
+  }
+
+  /// Creates a [ScreenProtectionCapabilities] from a map.
   factory ScreenProtectionCapabilities.fromMap(Map<Object?, Object?> map) {
     final rawLimitations = map['limitations'];
     final limitations = rawLimitations is List
@@ -493,6 +637,46 @@ enum ScreenProtectionEventType {
         return ScreenProtectionEventType.screenshotTaken;
     }
   }
+
+  /// Converts a Pigeon [ScreenProtectionEventTypeMessage] into a
+  /// [ScreenProtectionEventType].
+  static ScreenProtectionEventType fromPigeon(
+    ScreenProtectionEventTypeMessage type,
+  ) {
+    switch (type) {
+      case ScreenProtectionEventTypeMessage.screenshotTaken:
+        return ScreenProtectionEventType.screenshotTaken;
+      case ScreenProtectionEventTypeMessage.recordingStarted:
+        return ScreenProtectionEventType.recordingStarted;
+      case ScreenProtectionEventTypeMessage.recordingStopped:
+        return ScreenProtectionEventType.recordingStopped;
+      case ScreenProtectionEventTypeMessage.maskShown:
+        return ScreenProtectionEventType.maskShown;
+      case ScreenProtectionEventTypeMessage.maskHidden:
+        return ScreenProtectionEventType.maskHidden;
+      case ScreenProtectionEventTypeMessage.shortcutBlocked:
+        return ScreenProtectionEventType.shortcutBlocked;
+    }
+  }
+
+  /// Converts this [ScreenProtectionEventType] into a Pigeon
+  /// [ScreenProtectionEventTypeMessage].
+  ScreenProtectionEventTypeMessage toPigeon() {
+    switch (this) {
+      case ScreenProtectionEventType.screenshotTaken:
+        return ScreenProtectionEventTypeMessage.screenshotTaken;
+      case ScreenProtectionEventType.recordingStarted:
+        return ScreenProtectionEventTypeMessage.recordingStarted;
+      case ScreenProtectionEventType.recordingStopped:
+        return ScreenProtectionEventTypeMessage.recordingStopped;
+      case ScreenProtectionEventType.maskShown:
+        return ScreenProtectionEventTypeMessage.maskShown;
+      case ScreenProtectionEventType.maskHidden:
+        return ScreenProtectionEventTypeMessage.maskHidden;
+      case ScreenProtectionEventType.shortcutBlocked:
+        return ScreenProtectionEventTypeMessage.shortcutBlocked;
+    }
+  }
 }
 
 /// Represents a real-time screen security event emitted by the underlying
@@ -525,7 +709,36 @@ class ScreenProtectionEvent {
   /// detection source, or display count).
   final Map<String, dynamic> metadata;
 
-  /// Creates a [ScreenProtectionEvent] from a platform channel map.
+  /// Creates a [ScreenProtectionEvent] from a Pigeon
+  /// [ScreenProtectionEventMessage].
+  factory ScreenProtectionEvent.fromPigeon(
+    ScreenProtectionEventMessage message,
+  ) {
+    final metadata = <String, dynamic>{};
+    for (final entry in message.metadata.entries) {
+      metadata[entry.key] = entry.value;
+    }
+    return ScreenProtectionEvent(
+      type: ScreenProtectionEventType.fromPigeon(message.type),
+      timestamp: DateTime.fromMillisecondsSinceEpoch(message.timestamp),
+      platform: message.platform,
+      isCaptured: message.isCaptured,
+      metadata: metadata,
+    );
+  }
+
+  /// Converts this event to a Pigeon [ScreenProtectionEventMessage].
+  ScreenProtectionEventMessage toPigeon() {
+    return ScreenProtectionEventMessage(
+      type: type.toPigeon(),
+      timestamp: timestamp.millisecondsSinceEpoch,
+      platform: platform,
+      isCaptured: isCaptured,
+      metadata: Map<String, Object?>.from(metadata),
+    );
+  }
+
+  /// Creates a [ScreenProtectionEvent] from a map.
   factory ScreenProtectionEvent.fromMap(Map<Object?, Object?> map) {
     final rawTimestamp = map['timestamp'];
     final timestamp = rawTimestamp is int
