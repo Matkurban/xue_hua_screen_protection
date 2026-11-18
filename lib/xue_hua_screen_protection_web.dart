@@ -7,9 +7,9 @@ import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
 
 import 'src/models/screen_protection_models.dart';
-import 'xue_hua_screen_protection_platform_interface.dart';
+import 'src/screen_protection_backend.dart';
 
-/// The Web implementation of [XueHuaScreenProtectionPlatform].
+/// The Web implementation of [ScreenProtectionBackend].
 ///
 /// Since web browsers operate inside a sandboxed environment and cannot block
 /// OS-level screenshot tools (`FLAG_SECURE`), [XueHuaScreenProtectionWeb]
@@ -19,15 +19,15 @@ import 'xue_hua_screen_protection_platform_interface.dart';
 ///   tab is hidden (`visibilitychange`) or the window loses focus (`blur`).
 /// - Interception of `PrintScreen` and common capture/print/save shortcuts.
 /// - Optional blocking of right-click context menus, text selection, and drag.
-class XueHuaScreenProtectionWeb extends XueHuaScreenProtectionPlatform {
+class XueHuaScreenProtectionWeb implements ScreenProtectionBackend {
   /// Constructs a [XueHuaScreenProtectionWeb] and registers DOM listeners.
   XueHuaScreenProtectionWeb() {
     _attachDomListeners();
   }
 
-  /// Registers [XueHuaScreenProtectionWeb] as the platform implementation.
+  /// Registers [XueHuaScreenProtectionWeb] as the active backend on Web.
   static void registerWith(Registrar registrar) {
-    XueHuaScreenProtectionPlatform.instance = XueHuaScreenProtectionWeb();
+    ScreenProtectionBackendRegistry.register(XueHuaScreenProtectionWeb());
   }
 
   static const String _styleElementId = 'xue-hua-screen-protection-style';

@@ -1,15 +1,19 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xue_hua_screen_protection/src/pigeon/messages.g.dart';
+import 'package:xue_hua_screen_protection/src/pigeon/pigeon_screen_protection_backend.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late PigeonXueHuaScreenProtection platform;
+  late PigeonScreenProtectionBackend backend;
   final MessageCodec<Object?> codec = ScreenProtectionHostApi.pigeonChannelCodec;
 
   bool secureState = false;
+  bool maskVisibleState = false;
   ScreenProtectionMaskConfigMessage? lastMaskConfig;
+  WebProtectionConfigMessage? lastWebConfig;
 
   void registerMockPigeonHostHandler(
     String methodName,
@@ -50,8 +54,10 @@ void main() {
 
   setUp(() {
     secureState = false;
+    maskVisibleState = false;
     lastMaskConfig = null;
-    platform = PigeonXueHuaScreenProtection();
+    lastWebConfig = null;
+    backend = PigeonScreenProtectionBackend();
 
     registerMockPigeonHostHandler('setSecureScreen', (List<Object?>? args) {
       secureState = (args?[0] as bool?) ?? false;
@@ -68,14 +74,20 @@ void main() {
         return true;
       },
     );
-    registerMockPigeonHostHandler('configureWebProtection', (_) => false);
+    registerMockPigeonHostHandler(
+      'configureWebProtection',
+      (List<Object?>? args) {
+        lastWebConfig = args?[0] as WebProtectionConfigMessage?;
+        return false;
+      },
+    );
     registerMockPigeonHostHandler('isScreenBeingRecorded', (_) => false);
     registerMockPigeonHostHandler('getProtectionStatus', (_) {
       return ScreenProtectionStatusMessage(
         isSecureScreenEnabled: secureState,
-        isAppSwitcherMaskEnabled: true,
+        isAppSwitcherMaskEnabled: lastMaskConfig?.enabled ?? false,
         isScreenBeingRecorded: false,
-        isMaskCurrentlyVisible: false,
+        isMaskCurrentlyVisible: maskVisibleState,
         platform: 'android',
       );
     });
@@ -89,15 +101,21 @@ void main() {
         supportsRecordingDetection: true,
         supportsNativeAppSwitcherMask: true,
         supportsNativeBlurEffect: true,
-        limitations: const <String>[],
+        limitations: const <String>['Note'],
       );
     });
-    registerMockPigeonHostHandler('showPrivacyMask', (_) => true);
-    registerMockPigeonHostHandler('hidePrivacyMask', (_) => true);
+    registerMockPigeonHostHandler('showPrivacyMask', (_) {
+      maskVisibleState = true;
+      return true;
+    });
+    registerMockPigeonHostHandler('hidePrivacyMask', (_) {
+      maskVisibleState = false;
+      return true;
+    });
   });
 
   tearDown(() async {
-    await platform.dispose();
+    await backend.dispose();
     for (final method in hostMethods) {
       clearMockPigeonHostHandler(method);
     }
@@ -106,31 +124,43 @@ void main() {
   test(
     'setSecureScreen and isSecureScreenEnabled communicate over Pigeon HostApi',
     () async {
-      expect(await platform.setSecureScreen(true), isTrue);
-      expect(await platform.isSecureScreenEnabled(), isTrue);
+      expect(await backend.setSecureScreen(true), isTrue);
+      expect(await backend.isSecureScreenEnabled(), isTrue);
 
-      expect(await platform.setSecureScreen(false), isTrue);
-      expect(await platform.isSecureScreenEnabled(), isFalse);
+      expect(await backend.setSecureScreen(false), isTrue);
+      expect(await backend.isSecureScreenEnabled(), isFalse);
     },
   );
 
   test(
-    'getProtectionStatus and getCapabilities decode Pigeon messages',
+    'getProtectionStatus, show/hide mask, and getCapabilities decode Pigeon messages',
     () async {
-      await platform.setSecureScreen(true);
-      final status = await platform.getProtectionStatus();
+      await backend.setSecureScreen(true);
+      await backend.configureAppSwitcherProtection(
+        const ScreenProtectionMaskConfig(),
+      );
+      expect(await backend.showPrivacyMask(), isTrue);
+
+      final status = await backend.getProtectionStatus();
       expect(status.platform, 'android');
       expect(status.isSecureScreenEnabled, isTrue);
+      expect(status.isAppSwitcherMaskEnabled, isTrue);
+      expect(status.isMaskCurrentlyVisible, isTrue);
 
-      final caps = await platform.getCapabilities();
+      expect(await backend.hidePrivacyMask(), isTrue);
+      expect(await backend.isScreenBeingRecorded(), isFalse);
+
+      final caps = await backend.getCapabilities();
       expect(caps.platform, 'android');
+      expect(caps.osVersion, 'Android 15 (API 35)');
       expect(caps.supportsHardwareAntiScreenshot, isTrue);
       expect(caps.supportsRecordingDetection, isTrue);
+      expect(caps.limitations, equals(<String>['Note']));
     },
   );
 
   test(
-    'configureAppSwitcherProtection encodes ScreenProtectionMaskConfigMessage',
+    'configureAppSwitcherProtection and configureWebProtection encode Pigeon messages',
     () async {
       const config = ScreenProtectionMaskConfig(
         enabled: true,
@@ -138,12 +168,30 @@ void main() {
         blurSigma: 18.0,
         title: 'Pigeon Mask',
       );
-      expect(await platform.configureAppSwitcherProtection(config), isTrue);
+      expect(await backend.configureAppSwitcherProtection(config), isTrue);
       expect(lastMaskConfig, isNotNull);
       expect(lastMaskConfig!.enabled, isTrue);
       expect(lastMaskConfig!.style, ScreenProtectionMaskStyleMessage.blur);
       expect(lastMaskConfig!.blurSigma, 18.0);
       expect(lastMaskConfig!.title, 'Pigeon Mask');
+
+      // Style `none` normalizes `enabled` to false in the Pigeon payload.
+      await backend.configureAppSwitcherProtection(
+        const ScreenProtectionMaskConfig(
+          enabled: true,
+          style: ScreenProtectionMaskStyle.none,
+        ),
+      );
+      expect(lastMaskConfig!.enabled, isFalse);
+
+      const webConfig = WebProtectionConfig(
+        disableContextMenu: false,
+        disablePrint: true,
+      );
+      expect(await backend.configureWebProtection(webConfig), isFalse);
+      expect(lastWebConfig, isNotNull);
+      expect(lastWebConfig!.disableContextMenu, isFalse);
+      expect(lastWebConfig!.disablePrint, isTrue);
     },
   );
 
@@ -151,7 +199,7 @@ void main() {
     'ScreenProtectionFlutterApi delivers strongly-typed events to onProtectionEvent stream',
     () async {
       final events = <ScreenProtectionEvent>[];
-      final sub = platform.onProtectionEvent.listen(events.add);
+      final sub = backend.onProtectionEvent.listen(events.add);
 
       final eventMessage = ScreenProtectionEventMessage(
         type: ScreenProtectionEventTypeMessage.screenshotTaken,

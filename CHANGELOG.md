@@ -1,9 +1,10 @@
 ## 1.1.0
 
-* Replace `plugin_platform_interface` and manual `MethodChannel` / `EventChannel` string-map serialization with strongly-typed **Pigeon (`^30.0.3`)** code generation (`pigeons/messages.dart`, `ScreenProtectionHostApi`, `ScreenProtectionFlutterApi`, and `PigeonXueHuaScreenProtection`).
-* Refactor Android (`Kotlin`), iOS (`Swift`), macOS (`Swift`), Windows (`C++`), and Linux (`GObject C/C++`) native plugin implementations to implement Pigeon's generated `ScreenProtectionHostApi` interface and stream real-time security events through `ScreenProtectionFlutterApi`.
-* Remove the `plugin_platform_interface` runtime dependency while preserving 100% backward compatibility for all public Dart APIs (`XueHuaScreenProtection`, `ScreenProtectionScope`, `ScreenProtectionWatermark`, `ScreenProtectionMaskConfig`, `WebProtectionConfig`, `ScreenProtectionStatus`, `ScreenProtectionCapabilities`, `ScreenProtectionEvent`).
-* Verify Windows (`C++17`) and Linux (`GObject C++17`) native sources under Clang (`-Wall -Wextra -Werror`) with zero warnings and zero errors.
+* Replace `plugin_platform_interface` and manual `MethodChannel` / `EventChannel` string-map serialization with strongly-typed **Pigeon (`^30.0.4`)** code generation (`pigeons/messages.dart`, `ScreenProtectionHostApi`, and `ScreenProtectionFlutterApi`).
+* Redesign and refactor `lib/` to remove legacy `*_platform_interface.dart` and `*_method_channel.dart` files and patterns, introducing a clean `ScreenProtectionBackend` contract (`lib/src/screen_protection_backend.dart`), internal `PigeonScreenProtectionBackend` bridge (`lib/src/pigeon/pigeon_screen_protection_backend.dart`), and isolated generated code (`lib/src/pigeon/messages.g.dart`) without leaking Pigeon DTOs into public APIs or domain models.
+* Refactor Android (`Kotlin`), iOS (`Swift`), macOS (`Swift`), Windows (`C++`), and Linux (`GObject C/C++`) native plugin implementations to implement Pigeon's generated `ScreenProtectionHostApi` interface and stream real-time security events through `ScreenProtectionFlutterApi`, and update `XueHuaScreenProtectionWeb` to implement `ScreenProtectionBackend`.
+* Remove the `plugin_platform_interface` dependency while preserving backward compatibility for all public Dart APIs (`XueHuaScreenProtection`, `ScreenProtectionScope`, `ScreenProtectionWatermark`, `ScreenProtectionMaskConfig`, `WebProtectionConfig`, `ScreenProtectionStatus`, `ScreenProtectionCapabilities`, `ScreenProtectionEvent`).
+* Verify compilation across macOS, iOS (Simulator), Android, and Web, run unit/widget and macOS `integration_test` suites, and verify Windows (`C++17`) and Linux (`GObject C++14/17`) native sources under Clang (`-Wall -Wextra -Werror`) with zero warnings and zero errors.
 
 ## 1.0.6
 

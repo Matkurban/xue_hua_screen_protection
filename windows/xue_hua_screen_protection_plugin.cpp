@@ -367,7 +367,7 @@ ErrorOr<bool> XueHuaScreenProtectionPlugin::ConfigureAppSwitcherProtection(
     const ScreenProtectionMaskConfigMessage &config) {
   mask_enabled_ = config.enabled();
   mask_style_ = config.style();
-  mask_blur_sigma_ = config.blur_sigma();
+  (void)config.blur_sigma();
   mask_background_color_ = static_cast<uint32_t>(config.background_color());
   mask_text_color_ = static_cast<uint32_t>(config.text_color());
   mask_title_ =

@@ -4,8 +4,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../xue_hua_screen_protection_platform_interface.dart';
 import '../models/screen_protection_models.dart';
+import '../screen_protection_backend.dart';
 
 /// Internal handle implemented by [ScreenProtectionScope]'s [State] so
 /// [ScreenProtectionCoordinator] can evaluate visibility and reconcile native
@@ -47,7 +47,8 @@ final class ScreenProtectionCoordinator {
   final List<ScreenProtectionScopeHandle> _scopes =
       <ScreenProtectionScopeHandle>[];
 
-  XueHuaScreenProtectionPlatform? _lastPlatform;
+  ScreenProtectionBackend? _lastBackend;
+  int? _lastBackendEpoch;
   WidgetsBinding? _attachedBinding;
   bool _postFrameCheckScheduled = false;
 
@@ -57,7 +58,7 @@ final class ScreenProtectionCoordinator {
       const ScreenProtectionMaskConfig.disabled();
   bool _hasExplicitImperativeMask = false;
 
-  // Last state confirmed applied to the current XueHuaScreenProtectionPlatform.
+  // Last state confirmed applied to the current ScreenProtectionBackend.
   bool? _appliedSecureScreen;
   ScreenProtectionMaskConfig? _appliedMaskConfig;
 
@@ -74,15 +75,16 @@ final class ScreenProtectionCoordinator {
 
   Future<void>? _reconcileInFlight;
 
-  XueHuaScreenProtectionPlatform get _platform =>
-      XueHuaScreenProtectionPlatform.instance;
+  ScreenProtectionBackend get _backend => ScreenProtectionBackendRegistry.instance;
 
-  void _syncPlatformInstance() {
-    final current = _platform;
-    if (identical(_lastPlatform, current)) {
+  void _syncBackendInstance() {
+    final epoch = ScreenProtectionBackendRegistry.epoch;
+    final current = _backend;
+    if (_lastBackendEpoch == epoch && identical(_lastBackend, current)) {
       return;
     }
-    _lastPlatform = current;
+    _lastBackendEpoch = epoch;
+    _lastBackend = current;
     _imperativeSecureScreen = false;
     _imperativeMaskConfig = const ScreenProtectionMaskConfig.disabled();
     _hasExplicitImperativeMask = false;
@@ -127,7 +129,7 @@ final class ScreenProtectionCoordinator {
   /// Defers native channel activation to the post-frame phase so route pushes
   /// and Flutter Driver interactions complete first-frame rasterization cleanly.
   void registerScope(ScreenProtectionScopeHandle scope) {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     if (!_scopes.contains(scope)) {
       _scopes.add(scope);
     }
@@ -138,7 +140,7 @@ final class ScreenProtectionCoordinator {
   /// Notifies the coordinator that a registered scope's widget configuration or
   /// tree activation state changed.
   void notifyScopeChanged(ScreenProtectionScopeHandle scope) {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     if (!_scopes.contains(scope)) {
       return;
     }
@@ -149,7 +151,7 @@ final class ScreenProtectionCoordinator {
   /// reconciles protection state so unmounted pages never leave stale native
   /// flags or app-switcher masks behind.
   void unregisterScope(ScreenProtectionScopeHandle scope) {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     _scopes.remove(scope);
     if (scope.isOnstage) {
       scope.notifyOnstageChanged(false, fromDispose: true);
@@ -160,7 +162,7 @@ final class ScreenProtectionCoordinator {
   /// Records an imperative `setSecureScreen` / `enableSecureScreen` /
   /// `disableSecureScreen` request and reconciles with any onstage scopes.
   Future<bool> setImperativeSecureScreen(bool enabled) async {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     _imperativeSecureScreen = enabled;
     final onstageScopes = _collectOnstageScopes(notifyChanges: true);
     if (onstageScopes.isEmpty) {
@@ -179,7 +181,7 @@ final class ScreenProtectionCoordinator {
   Future<bool> setImperativeMaskConfig(
     ScreenProtectionMaskConfig config,
   ) async {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     _imperativeMaskConfig = config;
     _hasExplicitImperativeMask = true;
     final onstageScopes = _collectOnstageScopes(notifyChanges: true);
@@ -197,7 +199,7 @@ final class ScreenProtectionCoordinator {
   /// Evaluates onstage visibility for all mounted [ScreenProtectionScope]s and
   /// reconciles platform state if needed.
   void evaluateAndReconcile() {
-    _syncPlatformInstance();
+    _syncBackendInstance();
     final onstageScopes = _collectOnstageScopes(notifyChanges: true);
     if (onstageScopes.isNotEmpty) {
       _scopeSessionActive = true;
@@ -264,9 +266,10 @@ final class ScreenProtectionCoordinator {
 
   Future<void> _runReconcileLoop() async {
     while (true) {
-      final platform = _platform;
-      if (!identical(_lastPlatform, platform)) {
-        _syncPlatformInstance();
+      final epoch = ScreenProtectionBackendRegistry.epoch;
+      final backend = _backend;
+      if (_lastBackendEpoch != epoch || !identical(_lastBackend, backend)) {
+        _syncBackendInstance();
         return;
       }
 
@@ -313,10 +316,11 @@ final class ScreenProtectionCoordinator {
       if (restoreMaskBeforeSecure) {
         final targetMask = _desiredMaskConfig;
         _forceImperativeMaskSync = false;
-        _lastMaskCallResult = await platform.configureAppSwitcherProtection(
+        _lastMaskCallResult = await backend.configureAppSwitcherProtection(
           targetMask,
         );
-        if (identical(_lastPlatform, platform)) {
+        if (_lastBackendEpoch == ScreenProtectionBackendRegistry.epoch &&
+            identical(_lastBackend, backend)) {
           _appliedMaskConfig = targetMask;
           // Force secure re-application so platforms like Linux re-arm secure fallback.
           _appliedSecureScreen = null;
@@ -332,8 +336,9 @@ final class ScreenProtectionCoordinator {
               _appliedSecureScreen == null)) {
         final targetSecure = _desiredSecureScreen;
         _forceImperativeSecureSync = false;
-        _lastSecureCallResult = await platform.setSecureScreen(targetSecure);
-        if (identical(_lastPlatform, platform)) {
+        _lastSecureCallResult = await backend.setSecureScreen(targetSecure);
+        if (_lastBackendEpoch == ScreenProtectionBackendRegistry.epoch &&
+            identical(_lastBackend, backend)) {
           _appliedSecureScreen = targetSecure;
         }
         continue;
@@ -342,10 +347,11 @@ final class ScreenProtectionCoordinator {
       if (needImperativeMask || needScopeMask) {
         final targetMask = _desiredMaskConfig;
         _forceImperativeMaskSync = false;
-        _lastMaskCallResult = await platform.configureAppSwitcherProtection(
+        _lastMaskCallResult = await backend.configureAppSwitcherProtection(
           targetMask,
         );
-        if (identical(_lastPlatform, platform)) {
+        if (_lastBackendEpoch == ScreenProtectionBackendRegistry.epoch &&
+            identical(_lastBackend, backend)) {
           _appliedMaskConfig = targetMask;
         }
         continue;

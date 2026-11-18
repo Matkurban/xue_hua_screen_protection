@@ -556,16 +556,15 @@ handle_hide_privacy_mask(gpointer user_data) {
 
 static const XueHuaScreenProtectionScreenProtectionHostApiVTable
     kHostApiVTable = {
-        .set_secure_screen = handle_set_secure_screen,
-        .is_secure_screen_enabled = handle_is_secure_screen_enabled,
-        .configure_app_switcher_protection =
-            handle_configure_app_switcher_protection,
-        .configure_web_protection = handle_configure_web_protection,
-        .is_screen_being_recorded = handle_is_screen_being_recorded,
-        .get_protection_status = handle_get_protection_status,
-        .get_capabilities = handle_get_capabilities,
-        .show_privacy_mask = handle_show_privacy_mask,
-        .hide_privacy_mask = handle_hide_privacy_mask,
+        handle_set_secure_screen,
+        handle_is_secure_screen_enabled,
+        handle_configure_app_switcher_protection,
+        handle_configure_web_protection,
+        handle_is_screen_being_recorded,
+        handle_get_protection_status,
+        handle_get_capabilities,
+        handle_show_privacy_mask,
+        handle_hide_privacy_mask,
 };
 
 static void xue_hua_screen_protection_plugin_dispose(GObject* object) {

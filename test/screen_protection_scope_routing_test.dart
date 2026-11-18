@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
 
-class RecordingMockScreenProtectionPlatform
-    extends XueHuaScreenProtectionPlatform {
+class RecordingFakeScreenProtectionBackend
+    implements ScreenProtectionBackend {
   bool secureEnabled = false;
   bool recordingActive = false;
   bool maskVisible = false;
@@ -232,15 +232,16 @@ class _SimulatedSlidingPaneFrame extends StatelessWidget {
 }
 
 void main() {
-  late RecordingMockScreenProtectionPlatform mockPlatform;
+  late RecordingFakeScreenProtectionBackend mockPlatform;
 
   setUp(() {
-    mockPlatform = RecordingMockScreenProtectionPlatform();
-    XueHuaScreenProtectionPlatform.instance = mockPlatform;
+    mockPlatform = RecordingFakeScreenProtectionBackend();
+    XueHuaScreenProtection.setBackendForTesting(mockPlatform);
   });
 
   tearDown(() async {
     await mockPlatform.eventController.close();
+    XueHuaScreenProtection.resetBackendForTesting();
   });
 
   testWidgets(

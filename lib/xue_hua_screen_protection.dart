@@ -1,23 +1,13 @@
-import 'src/models/screen_protection_models.dart';
-import 'src/widgets/screen_protection_coordinator.dart';
-import 'xue_hua_screen_protection_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 
-export 'src/messages.g.dart'
-    show
-        ScreenProtectionCapabilitiesMessage,
-        ScreenProtectionEventMessage,
-        ScreenProtectionEventTypeMessage,
-        ScreenProtectionFlutterApi,
-        ScreenProtectionHostApi,
-        ScreenProtectionMaskConfigMessage,
-        ScreenProtectionMaskStyleMessage,
-        ScreenProtectionStatusMessage,
-        WebProtectionConfigMessage;
+import 'src/models/screen_protection_models.dart';
+import 'src/screen_protection_backend.dart';
+import 'src/widgets/screen_protection_coordinator.dart';
+
 export 'src/models/screen_protection_models.dart';
+export 'src/screen_protection_backend.dart' show ScreenProtectionBackend;
 export 'src/widgets/screen_protection_scope.dart';
 export 'src/widgets/screen_protection_watermark.dart';
-export 'xue_hua_screen_protection_pigeon.dart';
-export 'xue_hua_screen_protection_platform_interface.dart';
 
 /// Unified controller for cross-platform screen privacy protection,
 /// anti-screenshot/recording, capture detection, and app-switcher blur masks.
@@ -43,8 +33,19 @@ class XueHuaScreenProtection {
   /// Shared singleton instance of [XueHuaScreenProtection].
   static const XueHuaScreenProtection instance = XueHuaScreenProtection();
 
-  XueHuaScreenProtectionPlatform get _platform =>
-      XueHuaScreenProtectionPlatform.instance;
+  /// Replaces the active [ScreenProtectionBackend] for unit/widget tests.
+  @visibleForTesting
+  static void setBackendForTesting(ScreenProtectionBackend backend) {
+    ScreenProtectionBackendRegistry.register(backend);
+  }
+
+  /// Restores the default Pigeon-powered native [ScreenProtectionBackend].
+  @visibleForTesting
+  static void resetBackendForTesting() {
+    ScreenProtectionBackendRegistry.reset();
+  }
+
+  ScreenProtectionBackend get _backend => ScreenProtectionBackendRegistry.instance;
 
   /// Enables OS-level anti-screenshot and anti-screen-recording protection.
   ///
@@ -72,7 +73,7 @@ class XueHuaScreenProtection {
       ScreenProtectionCoordinator.instance.setImperativeSecureScreen(enabled);
 
   /// Queries whether OS-level secure screen protection is currently enabled.
-  Future<bool> isSecureScreenEnabled() => _platform.isSecureScreenEnabled();
+  Future<bool> isSecureScreenEnabled() => _backend.isSecureScreenEnabled();
 
   /// Configures the privacy overlay shown when the application enters the OS
   /// app switcher, background, or loses window focus.
@@ -82,36 +83,36 @@ class XueHuaScreenProtection {
 
   /// Configures Web-specific hardening rules (no-op on native platforms).
   Future<bool> configureWebProtection(WebProtectionConfig config) =>
-      _platform.configureWebProtection(config);
+      _backend.configureWebProtection(config);
 
   /// Queries whether the screen is currently being recorded, mirrored, or
   /// captured by an external display.
-  Future<bool> isScreenBeingRecorded() => _platform.isScreenBeingRecorded();
+  Future<bool> isScreenBeingRecorded() => _backend.isScreenBeingRecorded();
 
   /// Retrieves a complete snapshot of the active protection status.
   Future<ScreenProtectionStatus> getProtectionStatus() =>
-      _platform.getProtectionStatus();
+      _backend.getProtectionStatus();
 
   /// Retrieves the screen protection capabilities supported by the current
   /// operating system and runtime environment.
   Future<ScreenProtectionCapabilities> getCapabilities() =>
-      _platform.getCapabilities();
+      _backend.getCapabilities();
 
   /// Manually displays the native/DOM privacy mask overlay on top of the
   /// application window.
-  Future<bool> showPrivacyMask() => _platform.showPrivacyMask();
+  Future<bool> showPrivacyMask() => _backend.showPrivacyMask();
 
   /// Manually hides the native/DOM privacy mask overlay.
-  Future<bool> hidePrivacyMask() => _platform.hidePrivacyMask();
+  Future<bool> hidePrivacyMask() => _backend.hidePrivacyMask();
 
   /// Broadcast stream of all [ScreenProtectionEvent]s emitted by the platform.
   Stream<ScreenProtectionEvent> get onProtectionEvent =>
-      _platform.onProtectionEvent;
+      _backend.onProtectionEvent;
 
   /// Filtered stream emitting events whenever a screenshot or blocked capture
   /// shortcut is detected.
   Stream<ScreenProtectionEvent> get onScreenCaptured =>
-      _platform.onProtectionEvent.where(
+      _backend.onProtectionEvent.where(
         (ScreenProtectionEvent event) =>
             event.type == ScreenProtectionEventType.screenshotTaken ||
             event.type == ScreenProtectionEventType.shortcutBlocked,
@@ -119,7 +120,7 @@ class XueHuaScreenProtection {
 
   /// Filtered stream emitting `true` when screen recording starts and `false`
   /// when screen recording stops.
-  Stream<bool> get onScreenRecordingChanged => _platform.onProtectionEvent
+  Stream<bool> get onScreenRecordingChanged => _backend.onProtectionEvent
       .where(
         (ScreenProtectionEvent event) =>
             event.type == ScreenProtectionEventType.recordingStarted ||

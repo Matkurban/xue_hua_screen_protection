@@ -24,6 +24,12 @@ list(APPEND PLUGIN_SOURCES
   "xue_hua_screen_protection_plugin.h"
 )
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  set_source_files_properties("messages.g.cpp" PROPERTIES
+    COMPILE_OPTIONS "-Wno-unused-parameter"
+  )
+endif()
+
 # Define the plugin library target. Its name must not be changed (see comment
 # on PLUGIN_NAME above).
 add_library(${PLUGIN_NAME} SHARED

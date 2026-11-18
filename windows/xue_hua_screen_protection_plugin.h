@@ -70,7 +70,6 @@ class XueHuaScreenProtectionPlugin : public flutter::Plugin,
   bool mask_enabled_ = false;
   ScreenProtectionMaskStyleMessage mask_style_ =
       ScreenProtectionMaskStyleMessage::kBlur;
-  double mask_blur_sigma_ = 20.0;
   uint32_t mask_background_color_ = 0xEB0F172A;
   uint32_t mask_text_color_ = 0xFFFFFFFF;
   std::string mask_title_ = "Privacy Protected";

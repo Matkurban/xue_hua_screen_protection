@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:xue_hua_screen_protection/src/pigeon/pigeon_screen_protection_backend.dart';
+import 'package:xue_hua_screen_protection/src/screen_protection_backend.dart';
 import 'package:xue_hua_screen_protection/xue_hua_screen_protection.dart';
 
-class MockXueHuaScreenProtectionPlatform
-    extends XueHuaScreenProtectionPlatform {
+class FakeScreenProtectionBackend implements ScreenProtectionBackend {
   bool secureEnabled = false;
   bool maskVisible = false;
   ScreenProtectionMaskConfig maskConfig = const ScreenProtectionMaskConfig();
@@ -85,19 +86,21 @@ class MockXueHuaScreenProtectionPlatform
 }
 
 void main() {
-  final XueHuaScreenProtectionPlatform initialPlatform =
-      XueHuaScreenProtectionPlatform.instance;
-
-  test('$PigeonXueHuaScreenProtection is the default instance', () {
+  test('$PigeonScreenProtectionBackend is the default backend', () {
+    XueHuaScreenProtection.resetBackendForTesting();
     expect(
-      initialPlatform,
-      isInstanceOf<PigeonXueHuaScreenProtection>(),
+      ScreenProtectionBackendRegistry.instance,
+      isA<PigeonScreenProtectionBackend>(),
     );
   });
 
   test('enableSecureScreen and disableSecureScreen toggle state', () async {
-    final mockPlatform = MockXueHuaScreenProtectionPlatform();
-    XueHuaScreenProtectionPlatform.instance = mockPlatform;
+    final fakeBackend = FakeScreenProtectionBackend();
+    XueHuaScreenProtection.setBackendForTesting(fakeBackend);
+    addTearDown(() async {
+      await fakeBackend.eventController.close();
+      XueHuaScreenProtection.resetBackendForTesting();
+    });
     const plugin = XueHuaScreenProtection.instance;
 
     expect(await plugin.enableSecureScreen(), isTrue);
@@ -108,8 +111,12 @@ void main() {
   });
 
   test('configureAppSwitcherProtection and status serialization work', () async {
-    final mockPlatform = MockXueHuaScreenProtectionPlatform();
-    XueHuaScreenProtectionPlatform.instance = mockPlatform;
+    final fakeBackend = FakeScreenProtectionBackend();
+    XueHuaScreenProtection.setBackendForTesting(fakeBackend);
+    addTearDown(() async {
+      await fakeBackend.eventController.close();
+      XueHuaScreenProtection.resetBackendForTesting();
+    });
     const plugin = XueHuaScreenProtection.instance;
 
     const config = ScreenProtectionMaskConfig(
@@ -120,7 +127,7 @@ void main() {
     );
 
     expect(await plugin.configureAppSwitcherProtection(config), isTrue);
-    expect(mockPlatform.maskConfig, equals(config));
+    expect(fakeBackend.maskConfig, equals(config));
 
     await plugin.showPrivacyMask();
     final status = await plugin.getProtectionStatus();
@@ -129,8 +136,12 @@ void main() {
   });
 
   test('onScreenCaptured and onScreenRecordingChanged filter events', () async {
-    final mockPlatform = MockXueHuaScreenProtectionPlatform();
-    XueHuaScreenProtectionPlatform.instance = mockPlatform;
+    final fakeBackend = FakeScreenProtectionBackend();
+    XueHuaScreenProtection.setBackendForTesting(fakeBackend);
+    addTearDown(() async {
+      await fakeBackend.eventController.close();
+      XueHuaScreenProtection.resetBackendForTesting();
+    });
     const plugin = XueHuaScreenProtection.instance;
 
     final capturedEvents = <ScreenProtectionEvent>[];
@@ -139,14 +150,14 @@ void main() {
     final sub1 = plugin.onScreenCaptured.listen(capturedEvents.add);
     final sub2 = plugin.onScreenRecordingChanged.listen(recordingStates.add);
 
-    mockPlatform.eventController.add(
+    fakeBackend.eventController.add(
       ScreenProtectionEvent(
         type: ScreenProtectionEventType.screenshotTaken,
         timestamp: DateTime.fromMillisecondsSinceEpoch(1700000000000),
         platform: 'ios',
       ),
     );
-    mockPlatform.eventController.add(
+    fakeBackend.eventController.add(
       ScreenProtectionEvent(
         type: ScreenProtectionEventType.recordingStarted,
         timestamp: DateTime.fromMillisecondsSinceEpoch(1700000001000),
@@ -154,7 +165,7 @@ void main() {
         isCaptured: true,
       ),
     );
-    mockPlatform.eventController.add(
+    fakeBackend.eventController.add(
       ScreenProtectionEvent(
         type: ScreenProtectionEventType.recordingStopped,
         timestamp: DateTime.fromMillisecondsSinceEpoch(1700000002000),
@@ -179,8 +190,12 @@ void main() {
   testWidgets(
     'ScreenProtectionWatermark and ScreenProtectionScope render cleanly',
     (WidgetTester tester) async {
-      final mockPlatform = MockXueHuaScreenProtectionPlatform();
-      XueHuaScreenProtectionPlatform.instance = mockPlatform;
+      final fakeBackend = FakeScreenProtectionBackend();
+      XueHuaScreenProtection.setBackendForTesting(fakeBackend);
+      addTearDown(() async {
+        await fakeBackend.eventController.close();
+        XueHuaScreenProtection.resetBackendForTesting();
+      });
 
       await tester.pumpWidget(
         const MaterialApp(
@@ -197,7 +212,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Secret Document'), findsOneWidget);
-      expect(mockPlatform.secureEnabled, isTrue);
+      expect(fakeBackend.secureEnabled, isTrue);
     },
   );
 }

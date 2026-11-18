@@ -2,15 +2,17 @@ import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(
   PigeonOptions(
-    dartOut: 'lib/src/messages.g.dart',
+    dartOut: 'lib/src/pigeon/messages.g.dart',
     dartOptions: DartOptions(),
     kotlinOut:
         'android/src/main/kotlin/com/kurban/xue_hua_screen_protection/Messages.g.kt',
     kotlinOptions: KotlinOptions(
       package: 'com.kurban.xue_hua_screen_protection',
     ),
-    swiftOut:
-        'ios/xue_hua_screen_protection/Sources/xue_hua_screen_protection/Messages.g.swift',
+    swiftOut: <String>[
+      'ios/xue_hua_screen_protection/Sources/xue_hua_screen_protection/Messages.g.swift',
+      'macos/xue_hua_screen_protection/Sources/xue_hua_screen_protection/Messages.g.swift',
+    ],
     swiftOptions: SwiftOptions(),
     cppHeaderOut: 'windows/messages.g.h',
     cppSourceOut: 'windows/messages.g.cpp',
@@ -165,5 +167,6 @@ abstract class ScreenProtectionHostApi {
 /// Flutter API invoked by native platforms to stream real-time security events.
 @FlutterApi()
 abstract class ScreenProtectionFlutterApi {
+  @asyncCallback
   void onProtectionEvent(ScreenProtectionEventMessage event);
 }
