@@ -45,7 +45,8 @@ class XueHuaScreenProtection {
     ScreenProtectionBackendRegistry.reset();
   }
 
-  ScreenProtectionBackend get _backend => ScreenProtectionBackendRegistry.instance;
+  ScreenProtectionBackend get _backend =>
+      ScreenProtectionBackendRegistry.instance;
 
   /// Enables OS-level anti-screenshot and anti-screen-recording protection.
   ///

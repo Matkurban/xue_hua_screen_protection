@@ -75,7 +75,8 @@ final class ScreenProtectionCoordinator {
 
   Future<void>? _reconcileInFlight;
 
-  ScreenProtectionBackend get _backend => ScreenProtectionBackendRegistry.instance;
+  ScreenProtectionBackend get _backend =>
+      ScreenProtectionBackendRegistry.instance;
 
   void _syncBackendInstance() {
     final epoch = ScreenProtectionBackendRegistry.epoch;

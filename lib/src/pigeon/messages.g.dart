@@ -10,9 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart' show immutable, protected, visibleForTesting;
 
 Object? _extractReplyValueOrThrow(
-    List<Object?>? replyList,
-    String channelName, {
-    required bool isNullValid,
+  List<Object?>? replyList,
+  String channelName, {
+  required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -34,8 +34,11 @@ Object? _extractReplyValueOrThrow(
   return replyList.firstOrNull;
 }
 
-
-List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty = false}) {
+List<Object?> wrapResponse({
+  Object? result,
+  PlatformException? error,
+  bool empty = false,
+}) {
   if (empty) {
     return <Object?>[];
   }
@@ -44,6 +47,7 @@ List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty
   }
   return <Object?>[error.code, error.message, error.details];
 }
+
 bool _deepEquals(Object? a, Object? b) {
   if (identical(a, b)) {
     return true;
@@ -56,8 +60,9 @@ bool _deepEquals(Object? a, Object? b) {
   }
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed
-            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+        a.indexed.every(
+          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
+        );
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -106,13 +111,8 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
-
 /// Visual style applied to the native or DOM privacy overlay.
-enum ScreenProtectionMaskStyleMessage {
-  blur,
-  solidColor,
-  none;
-}
+enum ScreenProtectionMaskStyleMessage { blur, solidColor, none }
 
 /// Types of security and lifecycle events emitted by the host platform.
 enum ScreenProtectionEventTypeMessage {
@@ -121,7 +121,7 @@ enum ScreenProtectionEventTypeMessage {
   recordingStopped,
   maskShown,
   maskHidden,
-  shortcutBlocked;
+  shortcutBlocked,
 }
 
 /// Configuration payload for the app-switcher / inactive-window privacy mask.
@@ -171,7 +171,8 @@ class ScreenProtectionMaskConfigMessage {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static ScreenProtectionMaskConfigMessage decode(Object result) {
     result as List<Object?>;
@@ -191,13 +192,22 @@ class ScreenProtectionMaskConfigMessage {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! ScreenProtectionMaskConfigMessage || other.runtimeType != runtimeType) {
+    if (other is! ScreenProtectionMaskConfigMessage ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(enabled, other.enabled) && _deepEquals(style, other.style) && _deepEquals(blurSigma, other.blurSigma) && _deepEquals(backgroundColor, other.backgroundColor) && _deepEquals(textColor, other.textColor) && _deepEquals(title, other.title) && _deepEquals(subtitle, other.subtitle) && _deepEquals(showLockIcon, other.showLockIcon) && _deepEquals(protectOnWindowBlur, other.protectOnWindowBlur);
+    return _deepEquals(enabled, other.enabled) &&
+        _deepEquals(style, other.style) &&
+        _deepEquals(blurSigma, other.blurSigma) &&
+        _deepEquals(backgroundColor, other.backgroundColor) &&
+        _deepEquals(textColor, other.textColor) &&
+        _deepEquals(title, other.title) &&
+        _deepEquals(subtitle, other.subtitle) &&
+        _deepEquals(showLockIcon, other.showLockIcon) &&
+        _deepEquals(protectOnWindowBlur, other.protectOnWindowBlur);
   }
 
   @override
@@ -241,7 +251,8 @@ class WebProtectionConfigMessage {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static WebProtectionConfigMessage decode(Object result) {
     result as List<Object?>;
@@ -257,13 +268,21 @@ class WebProtectionConfigMessage {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! WebProtectionConfigMessage || other.runtimeType != runtimeType) {
+    if (other is! WebProtectionConfigMessage ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(disableContextMenu, other.disableContextMenu) && _deepEquals(disablePrint, other.disablePrint) && _deepEquals(disableDragAndSelect, other.disableDragAndSelect) && _deepEquals(interceptCaptureShortcuts, other.interceptCaptureShortcuts) && _deepEquals(blurOnVisibilityChange, other.blurOnVisibilityChange);
+    return _deepEquals(disableContextMenu, other.disableContextMenu) &&
+        _deepEquals(disablePrint, other.disablePrint) &&
+        _deepEquals(disableDragAndSelect, other.disableDragAndSelect) &&
+        _deepEquals(
+          interceptCaptureShortcuts,
+          other.interceptCaptureShortcuts,
+        ) &&
+        _deepEquals(blurOnVisibilityChange, other.blurOnVisibilityChange);
   }
 
   @override
@@ -307,7 +326,8 @@ class ScreenProtectionStatusMessage {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static ScreenProtectionStatusMessage decode(Object result) {
     result as List<Object?>;
@@ -323,13 +343,18 @@ class ScreenProtectionStatusMessage {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! ScreenProtectionStatusMessage || other.runtimeType != runtimeType) {
+    if (other is! ScreenProtectionStatusMessage ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(isSecureScreenEnabled, other.isSecureScreenEnabled) && _deepEquals(isAppSwitcherMaskEnabled, other.isAppSwitcherMaskEnabled) && _deepEquals(isScreenBeingRecorded, other.isScreenBeingRecorded) && _deepEquals(isMaskCurrentlyVisible, other.isMaskCurrentlyVisible) && _deepEquals(platform, other.platform);
+    return _deepEquals(isSecureScreenEnabled, other.isSecureScreenEnabled) &&
+        _deepEquals(isAppSwitcherMaskEnabled, other.isAppSwitcherMaskEnabled) &&
+        _deepEquals(isScreenBeingRecorded, other.isScreenBeingRecorded) &&
+        _deepEquals(isMaskCurrentlyVisible, other.isMaskCurrentlyVisible) &&
+        _deepEquals(platform, other.platform);
   }
 
   @override
@@ -390,7 +415,8 @@ class ScreenProtectionCapabilitiesMessage {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static ScreenProtectionCapabilitiesMessage decode(Object result) {
     result as List<Object?>;
@@ -410,13 +436,37 @@ class ScreenProtectionCapabilitiesMessage {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! ScreenProtectionCapabilitiesMessage || other.runtimeType != runtimeType) {
+    if (other is! ScreenProtectionCapabilitiesMessage ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(platform, other.platform) && _deepEquals(osVersion, other.osVersion) && _deepEquals(supportsHardwareAntiScreenshot, other.supportsHardwareAntiScreenshot) && _deepEquals(supportsHardwareAntiRecording, other.supportsHardwareAntiRecording) && _deepEquals(supportsScreenshotDetection, other.supportsScreenshotDetection) && _deepEquals(supportsRecordingDetection, other.supportsRecordingDetection) && _deepEquals(supportsNativeAppSwitcherMask, other.supportsNativeAppSwitcherMask) && _deepEquals(supportsNativeBlurEffect, other.supportsNativeBlurEffect) && _deepEquals(limitations, other.limitations);
+    return _deepEquals(platform, other.platform) &&
+        _deepEquals(osVersion, other.osVersion) &&
+        _deepEquals(
+          supportsHardwareAntiScreenshot,
+          other.supportsHardwareAntiScreenshot,
+        ) &&
+        _deepEquals(
+          supportsHardwareAntiRecording,
+          other.supportsHardwareAntiRecording,
+        ) &&
+        _deepEquals(
+          supportsScreenshotDetection,
+          other.supportsScreenshotDetection,
+        ) &&
+        _deepEquals(
+          supportsRecordingDetection,
+          other.supportsRecordingDetection,
+        ) &&
+        _deepEquals(
+          supportsNativeAppSwitcherMask,
+          other.supportsNativeAppSwitcherMask,
+        ) &&
+        _deepEquals(supportsNativeBlurEffect, other.supportsNativeBlurEffect) &&
+        _deepEquals(limitations, other.limitations);
   }
 
   @override
@@ -450,17 +500,12 @@ class ScreenProtectionEventMessage {
   Map<String, Object?> metadata;
 
   List<Object?> _toList() {
-    return <Object?>[
-      type,
-      timestamp,
-      platform,
-      isCaptured,
-      metadata,
-    ];
+    return <Object?>[type, timestamp, platform, isCaptured, metadata];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static ScreenProtectionEventMessage decode(Object result) {
     result as List<Object?>;
@@ -476,13 +521,18 @@ class ScreenProtectionEventMessage {
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! ScreenProtectionEventMessage || other.runtimeType != runtimeType) {
+    if (other is! ScreenProtectionEventMessage ||
+        other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(type, other.type) && _deepEquals(timestamp, other.timestamp) && _deepEquals(platform, other.platform) && _deepEquals(isCaptured, other.isCaptured) && _deepEquals(metadata, other.metadata);
+    return _deepEquals(type, other.type) &&
+        _deepEquals(timestamp, other.timestamp) &&
+        _deepEquals(platform, other.platform) &&
+        _deepEquals(isCaptured, other.isCaptured) &&
+        _deepEquals(metadata, other.metadata);
   }
 
   @override
@@ -495,7 +545,6 @@ class ScreenProtectionEventMessage {
   }
 }
 
-
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -503,25 +552,25 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is ScreenProtectionMaskStyleMessage) {
+    } else if (value is ScreenProtectionMaskStyleMessage) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is ScreenProtectionEventTypeMessage) {
+    } else if (value is ScreenProtectionEventTypeMessage) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is ScreenProtectionMaskConfigMessage) {
+    } else if (value is ScreenProtectionMaskConfigMessage) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    }    else if (value is WebProtectionConfigMessage) {
+    } else if (value is WebProtectionConfigMessage) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    }    else if (value is ScreenProtectionStatusMessage) {
+    } else if (value is ScreenProtectionStatusMessage) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is ScreenProtectionCapabilitiesMessage) {
+    } else if (value is ScreenProtectionCapabilitiesMessage) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    }    else if (value is ScreenProtectionEventMessage) {
+    } else if (value is ScreenProtectionEventMessage) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
@@ -534,10 +583,14 @@ class _PigeonCodec extends StandardMessageCodec {
     switch (type) {
       case 129:
         final value = readValue(buffer) as int?;
-        return value == null ? null : ScreenProtectionMaskStyleMessage.values[value];
+        return value == null
+            ? null
+            : ScreenProtectionMaskStyleMessage.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : ScreenProtectionEventTypeMessage.values[value];
+        return value == null
+            ? null
+            : ScreenProtectionEventTypeMessage.values[value];
       case 131:
         return ScreenProtectionMaskConfigMessage.decode(readValue(buffer)!);
       case 132:
@@ -560,38 +613,41 @@ class ScreenProtectionHostApi {
   /// available for dependency injection. If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
   ScreenProtectionHostApi({
-      BinaryMessenger? binaryMessenger, 
-      String messageChannelSuffix = '', 
-      })
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
 
   final BinaryMessenger? pigeonVar_binaryMessenger;
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
 
   final String pigeonVar_messageChannelSuffix;
 
-
   Future<bool> setSecureScreen(bool enabled) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.setSecureScreen$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.setSecureScreen$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[enabled],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
   Future<bool> isSecureScreenEnabled() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.isSecureScreenEnabled$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.isSecureScreenEnabled$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -600,52 +656,58 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
-  Future<bool> configureAppSwitcherProtection(ScreenProtectionMaskConfigMessage config) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.configureAppSwitcherProtection$pigeonVar_messageChannelSuffix';
+  Future<bool> configureAppSwitcherProtection(
+    ScreenProtectionMaskConfigMessage config,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.configureAppSwitcherProtection$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[config]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[config],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
   Future<bool> configureWebProtection(WebProtectionConfigMessage config) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.configureWebProtection$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.configureWebProtection$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[config]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[config],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
   Future<bool> isScreenBeingRecorded() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.isScreenBeingRecorded$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.isScreenBeingRecorded$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -654,16 +716,16 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
   Future<ScreenProtectionStatusMessage> getProtectionStatus() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.getProtectionStatus$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.getProtectionStatus$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -672,16 +734,16 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as ScreenProtectionStatusMessage;
   }
 
   Future<ScreenProtectionCapabilitiesMessage> getCapabilities() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.getCapabilities$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.getCapabilities$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -690,16 +752,16 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as ScreenProtectionCapabilitiesMessage;
   }
 
   Future<bool> showPrivacyMask() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.showPrivacyMask$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.showPrivacyMask$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -708,16 +770,16 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
   Future<bool> hidePrivacyMask() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.hidePrivacyMask$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionHostApi.hidePrivacyMask$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -726,11 +788,10 @@ class ScreenProtectionHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 }
@@ -741,29 +802,36 @@ abstract class ScreenProtectionFlutterApi {
 
   Future<void> onProtectionEvent(ScreenProtectionEventMessage event);
 
-  static void setUp(ScreenProtectionFlutterApi? api, {
+  static void setUp(
+    ScreenProtectionFlutterApi? api, {
     BinaryMessenger? binaryMessenger,
     String messageChannelSuffix = '',
-  }) 
-{
-    messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  }) {
+    messageChannelSuffix = messageChannelSuffix.isNotEmpty
+        ? '.$messageChannelSuffix'
+        : '';
     {
       final pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionFlutterApi.onProtectionEvent$messageChannelSuffix', pigeonChannelCodec,
-          binaryMessenger: binaryMessenger);
+        'dev.flutter.pigeon.xue_hua_screen_protection.ScreenProtectionFlutterApi.onProtectionEvent$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
       if (api == null) {
         pigeonVar_channel.setMessageHandler(null);
       } else {
         pigeonVar_channel.setMessageHandler((Object? message) async {
           final List<Object?> args = message! as List<Object?>;
-          final ScreenProtectionEventMessage arg_event = args[0]! as ScreenProtectionEventMessage;
+          final ScreenProtectionEventMessage arg_event =
+              args[0]! as ScreenProtectionEventMessage;
           try {
             await api.onProtectionEvent(arg_event);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
-          }          catch (e) {
-            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
           }
         });
       }

@@ -120,10 +120,7 @@ class PigeonScreenProtectionBackend implements ScreenProtectionBackend {
   @visibleForTesting
   Future<void> dispose() async {
     if (_flutterApiRegistered) {
-      ScreenProtectionFlutterApi.setUp(
-        null,
-        binaryMessenger: binaryMessenger,
-      );
+      ScreenProtectionFlutterApi.setUp(null, binaryMessenger: binaryMessenger);
       _flutterApiRegistered = false;
     }
     await _eventController.close();
